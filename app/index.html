@@ -1,0 +1,946 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1B263B">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Timone">
+<title>Timone · console</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<style>
+  html,body{margin:0;padding:0;background:var(--desk);}
+  *{box-sizing:border-box;}
+  a{color:var(--action);text-decoration:none;}
+  a:hover{color:var(--fg);}
+  input:focus,textarea:focus{outline:none;}
+  ::placeholder{color:var(--faint);}
+  :root{
+    --desk:#E7E2D4;--paper:#F5F2EC;--card:#FBF9F4;--line:#E2DDD2;--track:#E2DDD2;
+    --fg:#1B263B;--muted:#5B6472;--faint:#B9B2A4;--inksurf:#1B263B;
+    --gridline:rgba(27,38,59,0.035);--action:#2B4FFF;--ok:#1E7F4F;--neg:#B03A2E;--brassText:#A98343;
+  }
+  [data-tema="notte"]{
+    --desk:#0B0F19;--paper:#121927;--card:#1A2233;--line:rgba(245,242,236,0.13);--track:rgba(245,242,236,0.16);
+    --fg:#F0EDE4;--muted:#97A0B2;--faint:#5E6878;--inksurf:#232E45;
+    --gridline:rgba(245,242,236,0.045);--action:#7D95FF;--ok:#3DA372;--neg:#D0685A;--brassText:#C9A35E;
+  }
+  @keyframes sheetUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
+  @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+  @keyframes toastIn{from{opacity:0;transform:translate(-50%,10px);}to{opacity:1;transform:translate(-50%,0);}}
+  @keyframes breath{0%,100%{opacity:1;}50%{opacity:0.35;}}
+  @keyframes needleSettle{0%{transform:rotate(-16deg);}52%{transform:rotate(6deg);}78%{transform:rotate(-2.5deg);}92%{transform:rotate(1deg);}100%{transform:rotate(0deg);}}
+  @keyframes valueLock{0%{opacity:0;transform:translateY(7px);}68%{opacity:1;transform:translateY(-1.5px);}100%{opacity:1;transform:translateY(0);}}
+  @keyframes sealDraw{from{stroke-dashoffset:120;}to{stroke-dashoffset:0;}}
+  @keyframes ancoraCala{0%{transform:translateY(-9px);opacity:0;}62%{transform:translateY(2px);opacity:1;}84%{transform:translateY(-1px);}100%{transform:translateY(0);}}
+  @keyframes maturaPulse{0%,100%{opacity:1;}50%{opacity:0.5;}}
+  @keyframes rowIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+  @media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:0.01ms !important;animation-iteration-count:1 !important;transition-duration:0.01ms !important;}}
+  #frame *::-webkit-scrollbar{width:0;height:0;}
+  #frame *{scrollbar-width:none;}
+  #ctl{position:fixed;top:10px;left:10px;z-index:9999;font-family:'Space Grotesk',sans-serif;}
+  #ctl .panel{margin-top:6px;background:#FBF9F4;border:1px solid #E2DDD2;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px;box-shadow:0 10px 30px rgba(27,38,59,0.18);max-width:250px;}
+  #ctl .lab{font:600 9px 'Space Grotesk',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:#5B6472;}
+  #ctl .row{display:flex;flex-wrap:wrap;gap:6px;}
+  #ctl .chip{font:500 11px 'Space Grotesk',sans-serif;color:#5B6472;border:1px solid #E2DDD2;background:#F5F2EC;border-radius:999px;padding:5px 10px;cursor:pointer;user-select:none;}
+  #ctl .chip[aria-pressed="true"]{color:#F5F2EC;background:#1B263B;border-color:#1B263B;}
+  #ctl .toggle{font:600 12px 'Space Grotesk',sans-serif;color:#F5F2EC;background:#1B263B;border:none;border-radius:999px;padding:7px 12px;cursor:pointer;box-shadow:0 6px 18px rgba(27,38,59,0.22);}
+</style>
+</head>
+<body>
+<div id="root" data-tema="giorno" style="min-height:100dvh;display:flex;justify-content:center;background:var(--desk);font-family:'Space Grotesk',sans-serif;color:var(--fg);">
+  <div id="frame"></div>
+</div>
+
+<div id="ctl">
+  <button class="toggle" id="ctl-toggle">⚙ anteprima</button>
+  <div class="panel" id="ctl-panel" style="display:none;">
+    <div class="row"><span class="lab" style="width:100%;">Tema</span>
+      <span class="chip" data-ctl="tema" data-val="giorno">giorno</span>
+      <span class="chip" data-ctl="tema" data-val="notte">notte</span>
+    </div>
+    <div class="row"><span class="chip" data-ctl="varo">Mostra il Varo</span></div>
+    <div class="row"><span class="lab" style="width:100%;">Scenario</span>
+      <span class="chip" data-ctl="scenario" data-val="normale">normale</span>
+      <span class="chip" data-ctl="scenario" data-val="primo giorno">primo giorno</span>
+      <span class="chip" data-ctl="scenario" data-val="àncora scattata">àncora scattata</span>
+      <span class="chip" data-ctl="scenario" data-val="catena anomala">catena anomala</span>
+      <span class="chip" data-ctl="scenario" data-val="heartbeat mancato">heartbeat mancato</span>
+      <span class="chip" data-ctl="scenario" data-val="seconda conferma cooling-off">2ª conferma cooling-off</span>
+    </div>
+    <div class="row"><span class="chip" data-ctl="reset">↺ ricomincia</span></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const esc = s => String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const dot = c => `width:7px;height:7px;border-radius:50%;background:${c};flex-shrink:0;`;
+const seg = on => `flex:1;height:3px;border-radius:2px;background:${on?'var(--fg)':'var(--track)'};transition:background .3s ease;`;
+const railStyle = a => `padding:9px 10px;border-radius:9px;cursor:pointer;font:${a?'600':'500'} 13px 'Space Grotesk',sans-serif;color:${a?'var(--fg)':'var(--muted)'};background:${a?'var(--card)':'transparent'};border:1px solid ${a?'var(--line)':'transparent'};transition:background .15s ease;`;
+const navStyle = a => `flex:1;text-align:center;cursor:pointer;padding:4px 0;font:${a?'700':'500'} 13px 'Space Grotesk',sans-serif;color:${a?'var(--fg)':'var(--muted)'};`;
+const checkbox = on => `width:20px;height:20px;border-radius:6px;border:1.5px solid ${on?'var(--fg)':'var(--faint)'};background:${on?'var(--inksurf)':'transparent'};display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .15s ease;`;
+const CHECKMARK = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#F5F2EC" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13 L9 18 L20 6"></path></svg>`;
+const ANCHOR_SMALL = anim => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C9A35E" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"${anim?' style="animation:ancoraCala 1s cubic-bezier(0.22,1,0.36,1) both;"':''}><circle cx="12" cy="5" r="2"></circle><line x1="12" y1="7" x2="12" y2="21"></line><line x1="8" y1="10" x2="16" y2="10"></line><path d="M5 15 C5 19 9 21 12 21 C15 21 19 19 19 15"></path></svg>`;
+const SEAL = anim => `<circle cx="24" cy="24" r="19" stroke="#C9A35E" stroke-width="2.5" stroke-dasharray="4 3"></circle><circle cx="24" cy="24" r="12" stroke="#C9A35E" stroke-width="2.5"></circle><path d="M24 17 L24 31 M19 27 C19 30 29 30 29 27 M20 20 L28 20" stroke="#C9A35E" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="120"${anim?' style="animation:sealDraw 1.2s ease-out .2s both;"':''}></path>`;
+function compass(size, animate, stroke){
+  const col = stroke || 'currentColor';
+  const a = animate ? "animation:needleSettle 1.4s cubic-bezier(0.22,1,0.36,1) both;" : "";
+  return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="34" stroke="${col}" stroke-width="5"></circle><g style="transform-origin:50px 50px;${a}" stroke="${col}" stroke-width="5" stroke-linecap="round"><line x1="50" y1="16" x2="50" y2="4"></line><line x1="50" y1="84" x2="50" y2="96"></line><line x1="16" y1="50" x2="4" y2="50"></line><line x1="84" y1="50" x2="96" y2="50"></line><line x1="26" y1="26" x2="18" y2="18"></line><line x1="74" y1="26" x2="82" y2="18"></line><line x1="26" y1="74" x2="18" y2="82"></line><line x1="74" y1="74" x2="82" y2="82"></line></g><circle cx="50" cy="50" r="10" fill="${col}"></circle></svg>`;
+}
+const BELL = col => `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${col||'currentColor'}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 10 C6 6.7 8.7 4 12 4 C15.3 4 18 6.7 18 10 L18 15 L19.5 17.5 L4.5 17.5 L6 15 Z"></path><path d="M10.2 20 C10.6 20.8 11.3 21.2 12 21.2 C12.7 21.2 13.4 20.8 13.8 20"></path></svg>`;
+
+const props = { mostraVaro: true, scenario: 'normale', temaNotte: false };
+/* ---- accesso: Firebase Auth (email+password). Le chiavi Alpaca NON entrano mai qui ---- */
+let AUTH = null, USER = undefined;
+try{
+  firebase.initializeApp({
+    apiKey: "AIzaSyAaNkOzoVu5sbGALnNjKNtAXpe9hl8x5Pc",
+    authDomain: "timone-8699e.firebaseapp.com",
+    projectId: "timone-8699e",
+    appId: "1:946988635365:web:5ba7eeeb6326f74a30300c",
+  });
+  AUTH = firebase.auth();
+  AUTH.onAuthStateChanged(u => { USER = u; state.authBusy = false; render(); });
+}catch(e){ AUTH = null; }
+function loginScreen(){
+  const s = state;
+  return `<div style="display:flex;flex-direction:column;height:100%;animation:fadeIn .3s ease;">
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:16px;padding:0 28px;">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:6px;">${compass(56,true)}<div style="font:700 24px 'Space Grotesk',sans-serif;">Timone</div><div style="font:400 13px 'Space Grotesk',sans-serif;color:var(--muted);">La console è personale: entra per continuare.</div></div>
+      <div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 16px;display:flex;flex-direction:column;">
+        <div style="display:flex;flex-direction:column;gap:6px;padding:13px 0;border-bottom:1px solid var(--line);"><span style="font:600 11px 'Space Grotesk',sans-serif;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);">Email</span><input data-action="setLMail" id="in-lmail" type="email" value="${esc(s.lmail||'')}" autocomplete="username" style="background:transparent;border:none;padding:0;font:500 14px 'JetBrains Mono',monospace;color:var(--fg);width:100%;"></div>
+        <div style="display:flex;flex-direction:column;gap:6px;padding:13px 0;"><span style="font:600 11px 'Space Grotesk',sans-serif;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);">Password</span><input data-action="setLPass" id="in-lpass" type="password" value="${esc(s.lpass||'')}" autocomplete="current-password" style="background:transparent;border:none;padding:0;font:500 14px 'JetBrains Mono',monospace;color:var(--fg);width:100%;"></div>
+      </div>
+      ${s.authErr?`<div style="font:400 12px 'Space Grotesk',sans-serif;color:var(--brassText);line-height:1.5;">${esc(s.authErr)}</div>`:''}
+      <button data-action="authEntra" style="padding:15px;border:none;background:${s.authBusy?'var(--track)':'var(--inksurf)'};color:${s.authBusy?'var(--muted)':'#F5F2EC'};border-radius:12px;font:600 15px 'Space Grotesk',sans-serif;cursor:pointer;">${s.authBusy?'Un momento…':'Entra'}</button>
+      <div data-action="authCrea" style="font:500 13px 'Space Grotesk',sans-serif;color:var(--action);text-align:center;cursor:pointer;padding:4px;">Prima volta qui? Crea l'account</div>
+      <div style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);text-align:center;line-height:1.5;">Le chiavi Alpaca non entrano mai nel web:<br>vivono solo sul computer dove gira il motore.</div>
+    </div>
+    <div style="padding:0 24px 22px 24px;text-align:center;font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);">Timone v0.5 · paper trading</div>
+  </div>`;
+}
+/* ---- ponte dati: se data/ui.json esiste, la Bussola mostra i dati REALI ---- */
+let LIVE = null;
+const fmtN = (x, dec=2) => Number(x||0).toLocaleString('it-IT',{minimumFractionDigits:dec,maximumFractionDigits:dec});
+const fmtEUR = x => fmtN(x) + ' €';
+const fmtSign = x => (x>=0?'+':'−') + fmtN(Math.abs(x)) + ' €';
+function applyLive(j){
+  LIVE = j;
+  if(Array.isArray(j.posizioni) && j.posizioni.length){
+    posData.length = 0;
+    j.posizioni.forEach(p=>posData.push({
+      ticker: p.ticker,
+      quote: `${String(p.qty).replace('.',',')} quote · ${fmtN(p.value_usd)} USD`,
+      valore: fmtEUR(p.value_eur),
+      pesoN: p.peso,
+    }));
+  }
+  if(Array.isArray(j.runs) && j.runs.length){
+    runRegime.length = 0;
+    j.runs.forEach((r,i)=>runRegime.push({
+      id: 'live'+i, data: r.data, titolo: r.titolo, amber: !!r.amber,
+      sigillo: r.sigillo || '⌗ —',
+      rows: [{k:'Riassunto del run', v: esc((r.riassunto||'').split('\n').slice(1).join(' · '))}],
+    }));
+  }
+}
+(async()=>{
+  for(const u of ['../data/ui.json','/data/ui.json','data/ui.json']){
+    try{ const r = await fetch(u, {cache:'no-store'}); if(r.ok){ applyLive(await r.json()); render(); return; } }catch(e){}
+  }
+})();
+const initialState = () => ({
+  fase:'varo', override:false, varoStep:1, chiaveApi:'', chiaveSegreta:'', notaVaro:'', varando:false, postVaro:false,
+  varoTargets:[{t:'',p:''},{t:'',p:''}], varoImporto:'100', varoSoglia:'5',
+  varoActiveT:null, varoLimiti:{ordine:'', giorno:'', nrun:''},
+  tab:'bussola', menu:false, avvisiOpen:false, expandedRun:null, verRunning:false, verN:0, verDone:false,
+  expandedVer:null, quarantena:false, cooling:false, sheet:null, checkDoctor:false, checkCapito:false, notaRialzo:'',
+  ancoraRialzata:false, doctorRunning:false, doctorN:7, guardrailOpen:false, ancoraOpen:false, toast:null,
+  desktop:false, coolingEsito:null,
+});
+let state = initialState();
+let T = { toast:null, varo:null, ver:null, doc:null };
+let anim = { header:true, value:true, seal:true, ancora:true };
+
+/* ---- persistenza: il refresh non ti riporta all'inizio (mai le chiavi) ---- */
+const PERSIST_KEYS = ['fase','override','tab','postVaro','varoStep','varoTargets','varoImporto','varoSoglia','varoLimiti','notaVaro'];
+function saveUI(){
+  try{
+    const o = {};
+    PERSIST_KEYS.forEach(k=>o[k]=state[k]);
+    o._tema = props.temaNotte; o._varo = props.mostraVaro;
+    localStorage.setItem('timone-ui-v1', JSON.stringify(o));
+  }catch(e){}
+}
+function loadUI(){
+  try{
+    const o = JSON.parse(localStorage.getItem('timone-ui-v1')||'null');
+    if(!o) return;
+    PERSIST_KEYS.forEach(k=>{ if(o[k]!==undefined) state[k]=o[k]; });
+    if(o._tema!==undefined) props.temaNotte = o._tema;
+    if(o._varo!==undefined) props.mostraVaro = o._varo;
+  }catch(e){}
+}
+
+function setState(patch){
+  if(typeof patch==='function') patch = patch(state);
+  Object.assign(state, patch);
+  render();
+}
+function showToast(msg){ clearTimeout(T.toast); setState({toast:msg}); T.toast=setTimeout(()=>setState({toast:null}),2800); }
+
+/* ---------------- static data ---------------- */
+const posData = [
+  { ticker:'NVDA', quote:'0,574 quote · 117,04 USD', valore:'102,53 €', pesoN:51.6 },
+  { ticker:'SPY',  quote:'0,148 quote · 110,10 USD', valore:'96,45 €',  pesoN:48.4 },
+];
+const runRegime = [
+  { id:'g1', data:'mer 8 lug · 16:00', titolo:'2 ordini eseguiti · 1 rifiutato dal guardrail', amber:false, sigillo:'⌗ a3f2…9c41 ← ⌗ 77b0…e2d8', rows:[
+    { k:'Proposti', v:'Acquisto NVDA 48,90 € · acquisto SPY 51,10 € · acquisto NVDA 65,00 €' },
+    { k:'Rifiutato · regola violata', v:'Acquisto NVDA 65,00 € fermato: importo massimo per ordine 60 €. Funzionamento corretto.' },
+    { k:'Eseguiti (fill)', v:'NVDA 0,382 quote a 128,04 € · SPY 0,081 quote a 630,86 €' } ] },
+  { id:'g2', data:'mar 7 lug · 16:00', titolo:'2 ordini eseguiti · nessun guardrail violato', amber:false, sigillo:'⌗ 77b0…e2d8 ← ⌗ c410…88a2', rows:[
+    { k:'Proposti', v:'Acquisto NVDA 49,80 € · acquisto SPY 50,20 €' },
+    { k:'Eseguiti (fill)', v:'NVDA 0,391 quote a 127,20 € · SPY 0,080 quote a 627,10 €' },
+    { k:'Esito', v:'Scostamento dai pesi 2,4 pp · sotto soglia' } ] },
+  { id:'g3', data:'lun 6 lug · 16:00', titolo:'Run non completato — nessun ordine inviato', amber:true, sigillo:'⌗ c410…88a2 ← ⌗ 5fe9…03bb', rows:[
+    { k:'Proposti', v:'Acquisto NVDA 48,50 € · acquisto SPY 51,50 €' },
+    { k:'Cosa è successo', v:'Il broker non ha risposto entro 120 secondi (3 tentativi). Il motore ha annullato prima di qualsiasi invio.' },
+    { k:'Esito', v:"L'importo del run (100 €) resta in liquidità. Il run successivo parte da 200 €." } ] },
+  { id:'g4', data:'ven 4 lug · 16:00', titolo:'2 ordini eseguiti · nessun guardrail violato', amber:false, sigillo:'⌗ 5fe9…03bb ← ⌗ 12aa…7c19', rows:[
+    { k:'Proposti', v:'Acquisto NVDA 50,10 € · acquisto SPY 49,90 €' },
+    { k:'Eseguiti (fill)', v:'NVDA 0,395 quote a 126,80 € · SPY 0,080 quote a 624,20 €' } ] },
+];
+const runPrimo = [
+  { id:'v1', data:'oggi · varo', titolo:'Rotta v1 varata — nessun ordine', amber:false, sigillo:'⌗ 0000…0000 → ⌗ 8c1d…44f0', rows:[
+    { k:'Cosa è successo', v:'La rotta v1 (NVDA 60 · SPY 40 · 50 €/giorno · soglia 3 pp) è stata scritta e sigillata come primo anello della catena.' },
+    { k:'Cosa NON è successo', v:'Nessun ordine inviato, nessun titolo comprato. Il motore agisce solo al run in orario.' } ] },
+];
+const verRegime = [
+  { id:'v3', titolo:'v3 ← v2 · 12 giu 2026', sotto:'pesi 60/40 → 50/50 · importo invariato', nota:'Riduco la concentrazione su NVDA: 60/40 era una scommessa, non una rotta.' },
+  { id:'v2', titolo:'v2 ← v1 · 3 mar 2026', sotto:'importo 50 € → 100 € · soglia 3 pp → 5 pp', nota:'Due mesi di run regolari: raddoppio l’importo e allargo la soglia per ridurre i micro-ribilanciamenti.' },
+  { id:'v1', titolo:'v1 · varo · 25 gen 2026', sotto:'NVDA 60 · SPY 40 · 50 €/giorno · soglia 3 pp', nota:'Prima rotta: piccola, quotidiana, per imparare a fidarmi del motore prima che dei rendimenti.' },
+];
+const checkData = [
+  { nome:'Chiavi API', dettaglio:'valide · scadenza fra 41 giorni', ok:true },
+  { nome:'Endpoint broker', dettaglio:'paper-api.alpaca.markets · mai live', ok:true },
+  { nome:'Orologio di sistema', dettaglio:'scarto +0,3 s da NTP', ok:true },
+  { nome:'Fonte cambio BCE', dettaglio:'raggiungibile ma lenta (2,1 s) · da osservare', ok:false },
+  { nome:'Scheduler dei run', dettaglio:'cron attivo · prossimo trigger 16:00', ok:true },
+  { nome:'Spazio e dati', dettaglio:'database 4,2 MB · backup di ieri presente', ok:true },
+  { nome:'Integrità del Giornale', dettaglio:'catena verificata', ok:true },
+];
+
+/* ---------------- derived ---------------- */
+function derive(){
+  const s = state;
+  const onboard = props.mostraVaro;
+  const fase = (!onboard && !s.override) ? 'app' : s.fase;
+  const scenario = props.scenario;
+  const primoGiorno = s.postVaro || scenario === 'primo giorno';
+  const ancoraGiu = !primoGiorno && !s.ancoraRialzata &&
+    (scenario==='àncora scattata' || (!!LIVE && LIVE.anchor_down && scenario==='normale'));
+  const anomala = !primoGiorno && scenario==='catena anomala';
+  const hbMancato = !primoGiorno && scenario==='heartbeat mancato';
+  const secondaConferma = !primoGiorno && scenario==='seconda conferma cooling-off';
+  const coolingMaturata = secondaConferma && s.coolingEsito===null;
+  const aRegime = !primoGiorno;
+  const isDesktop = s.desktop && fase==='app';
+  return { onboard, fase, scenario, primoGiorno, ancoraGiu, anomala, hbMancato, secondaConferma, coolingMaturata, aRegime, isDesktop };
+}
+function computeAvvisi(d){
+  const s = state, out = [];
+  if(d.ancoraGiu) out.push({tipo:'Àncora auto-calata', quando:'oggi · 16:02', testo:'Dati broker incoerenti: scarto di 12,40 € tra saldo e ultimo fill. Il motore è fermo.', azione:'Vai a Sicurezza →', tab:'sicurezza'});
+  if(d.anomala) out.push({tipo:'Verifica del Giornale', quando:'oggi · 14:10', testo:'La catena non torna: il run del 3 lug non corrisponde al sigillo precedente.', azione:'Vai al Giornale →', tab:'giornale'});
+  if(d.hbMancato) out.push({tipo:'Heartbeat mancato', quando:'oggi · 16:05', testo:'Il run delle 16:00 non è partito e il motore non dà battito. Se tace ancora, l’àncora cala da sola.', azione:'Vai a Sicurezza →', tab:'sicurezza'});
+  if(d.coolingMaturata) out.push({tipo:'Cooling-off maturato', quando:'oggi', testo:'Le 72 ore sono passate: il limite 60 € → 80 € aspetta la tua seconda conferma.', azione:'Vai a Sicurezza →', tab:'sicurezza'});
+  if(s.cooling) out.push({tipo:'Cooling-off in maturazione', quando:'oggi', testo:'Importo massimo per ordine 60 € → 80 €. Seconda conferma fra 72 ore.', azione:'Vai a Sicurezza →', tab:'sicurezza'});
+  if(LIVE && d.scenario==='normale' && Array.isArray(LIVE.avvisi)){
+    LIVE.avvisi.forEach(a=>out.push({tipo:esc(a.tipo||'Avviso'), quando:esc(a.quando||''), testo:esc(a.testo||''), azione:'Vai a Sicurezza →', tab:'sicurezza'}));
+  }
+  if(!LIVE && d.aRegime && !d.ancoraGiu && !d.anomala && !d.hbMancato && !d.secondaConferma) out.push({tipo:'Cambio stimato', quando:'6 lug', testo:'Un run ha usato un cambio stimato (fonte BCE non raggiungibile). Marcato nel report fiscale.', azione:'Vai a Fiscale →', tab:'fiscale'});
+  return out;
+}
+
+/* ---------------- anagrafica simboli (verifica, non consiglio) ---------------- */
+let SYMBOLS = null, SYMBOLS_LOADING = false;
+function loadSymbols(){
+  if(SYMBOLS || SYMBOLS_LOADING) return;
+  SYMBOLS_LOADING = true;
+  (async()=>{
+    for(const u of ['../data/simboli.json','/data/simboli.json','data/simboli.json']){
+      try{ const r = await fetch(u); if(r.ok){ SYMBOLS = await r.json(); render(); return; } }catch(e){}
+    }
+  })();
+}
+function symbolLookup(t){
+  if(!SYMBOLS || !t) return null;
+  const q = t.trim().toUpperCase();
+  let lo=0, hi=SYMBOLS.length-1;
+  while(lo<=hi){ const m=(lo+hi)>>1; const s=SYMBOLS[m].s;
+    if(s===q) return SYMBOLS[m]; s<q ? lo=m+1 : hi=m-1; }
+  return null;
+}
+function symbolMatches(t, max=8){
+  if(!SYMBOLS || !t) return [];
+  const q = t.trim().toUpperCase(); const out=[];
+  for(const r of SYMBOLS){ if(r.s.startsWith(q)){ out.push(r); if(out.length>=max) break; } }
+  return out;
+}
+
+/* ---------------- varo: limiti (solo verso il basso) ---------------- */
+function varoTetti(){
+  return (LIVE && LIVE.limiti && LIVE.limiti.tetti) || {max_order_eur:120, max_daily_eur:200, max_orders_per_run:4};
+}
+function varoLimitiVal(){
+  const s = state, T = varoTetti();
+  const eff = (LIVE && LIVE.limiti && LIVE.limiti.effettivi) || T;
+  const num = v => parseFloat(String(v).replace(',','.'));
+  const cur = {
+    ordine: s.varoLimiti.ordine==='' ? eff.max_order_eur : num(s.varoLimiti.ordine),
+    giorno: s.varoLimiti.giorno==='' ? eff.max_daily_eur : num(s.varoLimiti.giorno),
+    nrun:   s.varoLimiti.nrun===''   ? eff.max_orders_per_run : parseInt(s.varoLimiti.nrun,10),
+  };
+  const errs = [];
+  if(!(cur.ordine>0) || cur.ordine>T.max_order_eur) errs.push(`importo max per ordine fra 1 e ${T.max_order_eur} € (tetto nel codice)`);
+  if(!(cur.giorno>0) || cur.giorno>T.max_daily_eur) errs.push(`budget giornaliero fra 1 e ${T.max_daily_eur} € (tetto nel codice)`);
+  if(!(cur.nrun>0) || cur.nrun>T.max_orders_per_run) errs.push(`ordini per run fra 1 e ${T.max_orders_per_run} (tetto nel codice)`);
+  return {cur, tetti:T, errs, ok:errs.length===0};
+}
+
+/* ---------------- varo: validazione + specchio ---------------- */
+function varoValidation(){
+  const s = state;
+  const parsed = s.varoTargets.map(r=>({t:String(r.t).trim().toUpperCase(), p:parseFloat(String(r.p).replace(',','.'))}));
+  const filled = parsed.filter(r=>r.t && !isNaN(r.p) && r.p>0);
+  const sum = filled.reduce((a,r)=>a+r.p,0);
+  const names = filled.map(r=>r.t);
+  const dup = names.some((t,i)=>names.indexOf(t)!==i);
+  const importo = parseFloat(String(s.varoImporto).replace(',','.'));
+  const soglia = parseFloat(String(s.varoSoglia).replace(',','.'));
+  const sumOk = Math.abs(sum-100) < 1e-6;
+  let msg = null;
+  if(filled.length < 1 || filled.length !== parsed.length) msg = 'Completa ticker e pesi per continuare';
+  else if(dup) msg = 'Ticker duplicati nella rotta';
+  else if(SYMBOLS && filled.some(r=>!symbolLookup(r.t))) msg = 'Un ticker non è riconosciuto tra i negoziabili';
+  else if(!sumOk) msg = 'La somma dei pesi deve fare 100';
+  else if(!(importo > 0)) msg = 'Importo per run non valido';
+  else if(!(soglia >= 0)) msg = 'Soglia non valida';
+  const L = varoLimitiVal();
+  if(!msg && L.ok && importo > L.cur.giorno) msg = `Importo per run oltre il budget giornaliero (${fmtN(L.cur.giorno,0)} €)`;
+  const specchio = [];
+  if(filled.length && !dup){
+    const max = filled.reduce((a,r)=>r.p>a.p?r:a, filled[0]);
+    specchio.push(`${filled.length} strument${filled.length===1?'o':'i'} in rotta; il più pesante è ${esc(max.t)} col ${fmtN(max.p,0)}% del portafoglio.`);
+    if(max.p >= 50) specchio.push(`Più di metà del capitale dipenderà da un solo strumento (${esc(max.t)}).`);
+    specchio.push('Strumenti USA quotati in dollari: il rendimento in euro dipenderà anche dal cambio EUR/USD, non solo dai prezzi.');
+    if(importo > 0) specchio.push(`Ritmo dichiarato: ~${fmtN(importo*21,0)} € al mese (${fmtN(importo,0)} € × ~21 giorni di borsa).`);
+    if(importo > 0 && L.ok){
+      const maxOrd = importo * max.p / 100;
+      if(maxOrd > L.cur.ordine) specchio.push(`Attenzione: col peso di ${esc(max.t)} l'ordine tipico più grande (~${fmtN(maxOrd,0)} €) supererebbe il limite per ordine (${fmtN(L.cur.ordine,0)} €) e verrebbe rifiutato dai guardrail.`);
+    }
+    if(soglia >= 0){
+      if(soglia < 1) specchio.push('Soglia sotto 1 pp: ribilanciamenti molto frequenti, più ordini e più costi.');
+      else if(soglia > 20) specchio.push('Soglia oltre 20 pp: i pesi potranno allontanarsi molto dal target prima di un ribilanciamento.');
+    }
+  }
+  return {ok: !msg, msg, sum: isNaN(sum)?0:sum, sumOk, targets: filled, importo, soglia, specchio};
+}
+function rottaYamlText(V){
+  return `# Rotta scritta dal Varo della Bussola — non è un consiglio: è la tua dichiarazione.\namount_per_run_eur: ${V.importo}\nrebalance_threshold_pct: ${V.soglia}\ntargets:\n` +
+    V.targets.map(r=>`  - ticker: ${r.t}\n    weight_pct: ${r.p}`).join('\n') + '\n';
+}
+
+/* ---------------- screens: VARO ---------------- */
+function varoScreen(){
+  const s = state;
+  const chiaviPronte = s.chiaveApi.trim().length>=4 && s.chiaveSegreta.trim().length>=4;
+  const btn1 = `padding:15px;border:none;border-radius:12px;background:${chiaviPronte?'var(--inksurf)':'var(--track)'};color:${chiaviPronte?'#F5F2EC':'var(--muted)'};font:600 15px 'Space Grotesk',sans-serif;cursor:${chiaviPronte?'pointer':'default'};margin-top:auto;flex-shrink:0;transition:background .2s ease;`;
+  const varaStyle = `padding:16px;border:none;border-radius:12px;background:${s.varando?'#8B94A6':'var(--action)'};color:#fff;font:600 15px 'Space Grotesk',sans-serif;cursor:${s.varando?'default':'pointer'};margin-top:auto;flex-shrink:0;transition:background .2s ease;`;
+  const kv=(k,v,b)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 0;${b?'border-bottom:1px solid var(--line);':''}"><span style="font:500 13px 'Space Grotesk',sans-serif;">${k}</span><span style="font:600 14px 'JetBrains Mono',monospace;">${v}</span></div>`;
+  const sum=(k,v,b)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;${b?'border-bottom:1px solid var(--line);':''}"><span style="font:400 13px 'Space Grotesk',sans-serif;color:var(--muted);">${k}</span><span style="font:500 13px 'JetBrains Mono',monospace;">${v}</span></div>`;
+  let step='';
+  if(s.varoStep===1){
+    step=`<div style="display:flex;flex-direction:column;gap:14px;padding:18px 24px 28px 24px;flex:1;min-height:0;overflow-y:auto;animation:fadeIn .3s ease;">
+      <div style="display:flex;flex-direction:column;gap:6px;"><div style="font:700 24px 'Space Grotesk',sans-serif;line-height:1.2;">Timone tiene la rotta.<br>Non promette il vento.</div><div style="font:400 13px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.6;">Un motore deterministico compra a orari fissi, secondo una rotta che scrivi tu. Niente segnali, niente consigli, niente prezzi in tempo reale.</div></div>
+      <div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 16px;display:flex;flex-direction:column;">
+        <div style="display:flex;flex-direction:column;gap:6px;padding:13px 0;border-bottom:1px solid var(--line);"><span style="font:600 11px 'Space Grotesk',sans-serif;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);">Chiave API Alpaca</span><input data-action="setChiaveApi" id="in-api" value="${esc(s.chiaveApi)}" placeholder="PK…" spellcheck="false" style="background:transparent;border:none;padding:0;font:500 14px 'JetBrains Mono',monospace;color:var(--fg);width:100%;"></div>
+        <div style="display:flex;flex-direction:column;gap:6px;padding:13px 0;"><span style="font:600 11px 'Space Grotesk',sans-serif;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);">Chiave segreta</span><input data-action="setChiaveSegreta" id="in-seg" type="password" value="${esc(s.chiaveSegreta)}" placeholder="••••••••••••••••" spellcheck="false" style="background:transparent;border:none;padding:0;font:500 14px 'JetBrains Mono',monospace;color:var(--fg);width:100%;"></div>
+      </div>
+      ${chiaviPronte?`<div style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;animation:fadeIn .3s ease;"><span style="width:7px;height:7px;border-radius:50%;background:var(--ok);flex-shrink:0;"></span><span style="font:400 12px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.45;">Endpoint verificato: <strong style="font-weight:600;color:var(--fg);">paper-api.alpaca.markets</strong> — denaro simulato, mai live. Le chiavi restano sul tuo computer.</span></div>`:''}
+      <button data-action="varoAvanti1" style="${btn1}">${chiaviPronte?'Continua · definisci la rotta':'Inserisci le chiavi per continuare'}</button>
+    </div>`;
+  } else if(s.varoStep===2){
+    loadSymbols();
+    const V = varoValidation();
+    const rows = s.varoTargets.map((r,i)=>{
+      const q = String(r.t).trim().toUpperCase();
+      const hit = symbolLookup(q);
+      const opts = hit ? [] : symbolMatches(q, 6);
+      let verifica = '';
+      if(SYMBOLS && q){
+        verifica = hit
+          ? `<div style="display:flex;align-items:center;gap:6px;padding:0 0 7px 0;"><span style="width:5px;height:5px;border-radius:50%;background:var(--ok);flex-shrink:0;"></span><span style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);">${esc(hit.n||q)} · negoziabile e frazionabile</span></div>`
+          : `<div style="display:flex;align-items:center;gap:6px;padding:0 0 7px 0;"><span style="width:5px;height:5px;border-radius:50%;background:var(--brassText);flex-shrink:0;"></span><span style="font:400 11px 'Space Grotesk',sans-serif;color:var(--brassText);">simbolo non riconosciuto tra i negoziabili</span></div>`;
+      }
+      const tendina = (s.varoActiveT===i && q && !hit && opts.length) ? `
+        <div style="background:var(--paper);border:1px solid var(--line);border-radius:10px;margin:0 0 9px 0;overflow:hidden;">
+          ${opts.map(o=>`<div data-action="pickSym" data-idx="${i}" data-sym="${esc(o.s)}" style="display:flex;justify-content:space-between;gap:10px;align-items:baseline;padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer;">
+            <span style="font:600 13px 'JetBrains Mono',monospace;">${esc(o.s)}</span>
+            <span style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(o.n)}</span>
+          </div>`).join('')}
+        </div>` : '';
+      return `
+      <div style="display:flex;flex-direction:column;${i<s.varoTargets.length-1?'border-bottom:1px solid var(--line);':''}">
+        <div style="display:flex;gap:8px;align-items:center;padding:9px 0;">
+          <input data-action="setVaroT" data-idx="${i}" id="in-vt${i}" value="${esc(r.t)}" placeholder="TICKER" spellcheck="false" autocomplete="off" style="background:transparent;border:none;padding:0;font:600 14px 'JetBrains Mono',monospace;color:var(--fg);width:110px;text-transform:uppercase;">
+          <div style="flex:1;"></div>
+          <input data-action="setVaroP" data-idx="${i}" id="in-vp${i}" value="${esc(r.p)}" placeholder="peso" inputmode="decimal" style="background:transparent;border:none;padding:0;font:600 14px 'JetBrains Mono',monospace;color:var(--fg);width:52px;text-align:right;">
+          <span style="font:400 12px 'Space Grotesk',sans-serif;color:var(--muted);">%</span>
+          ${s.varoTargets.length>2?`<span data-action="rmTarget" data-idx="${i}" style="font:600 14px 'Space Grotesk',sans-serif;color:var(--muted);cursor:pointer;padding:0 2px;">✕</span>`:''}
+        </div>
+        ${tendina}
+        ${verifica}
+      </div>`;
+    }).join('');
+    const specchio = V.specchio.length ? `
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="font:600 11px 'Space Grotesk',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);">Specchio della rotta · fatti, non consigli</div>
+        <div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 16px;display:flex;flex-direction:column;gap:8px;">
+          ${V.specchio.map(f=>`<div style="display:flex;gap:9px;align-items:baseline;"><span style="width:5px;height:5px;border-radius:50%;background:#A98343;flex-shrink:0;position:relative;top:-2px;"></span><span style="font:400 12px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.5;">${f}</span></div>`).join('')}
+        </div>
+        <div style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);">Lo specchio descrive ciò che TU hai scelto. Non è un giudizio né un consiglio.</div>
+      </div>` : '';
+    step=`<div style="display:flex;flex-direction:column;gap:14px;padding:18px 24px 28px 24px;flex:1;min-height:0;overflow-y:auto;animation:fadeIn .3s ease;">
+      <div style="display:flex;flex-direction:column;gap:6px;"><div style="font:700 24px 'Space Grotesk',sans-serif;">Scrivi la rotta v1</div><div style="font:400 13px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.6;">Ticker, pesi, importo, soglia: li scrivi tu. Timone non suggerisce nulla — e dopo il varo si cambia solo con quarantena e storico versioni.</div></div>
+      <div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:6px 16px;display:flex;flex-direction:column;">
+        ${rows}
+        <div data-action="addTarget" style="padding:11px 0;font:600 13px 'Space Grotesk',sans-serif;color:var(--action);cursor:pointer;border-top:1px solid var(--line);">+ aggiungi strumento</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;padding:0 2px;">
+        <span style="font:400 12px 'Space Grotesk',sans-serif;color:var(--muted);">Somma dei pesi</span>
+        <span style="font:600 14px 'JetBrains Mono',monospace;color:${V.sumOk?'var(--ok)':'var(--brassText)'};">${fmtN(V.sum,1)} / 100</span>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 16px;display:flex;flex-direction:column;">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--line);"><span style="font:500 13px 'Space Grotesk',sans-serif;">Importo per run (EUR)</span><input data-action="setVaroImporto" id="in-vimp" value="${esc(s.varoImporto)}" inputmode="decimal" style="background:transparent;border:none;padding:0;font:600 14px 'JetBrains Mono',monospace;color:var(--fg);width:70px;text-align:right;"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;"><span style="font:500 13px 'Space Grotesk',sans-serif;">Soglia ribilanciamento (pp)</span><input data-action="setVaroSoglia" id="in-vsog" value="${esc(s.varoSoglia)}" inputmode="decimal" style="background:transparent;border:none;padding:0;font:600 14px 'JetBrains Mono',monospace;color:var(--fg);width:70px;text-align:right;"></div>
+      </div>
+      ${specchio}
+      <div style="display:flex;flex-direction:column;gap:6px;"><div style="font:600 11px 'Space Grotesk',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);">Nota del capitano (per lo storico)</div><textarea data-action="setNotaVaro" id="in-notavaro" placeholder="Perché questa rotta? La nota resterà nella v1, datata." rows="3" style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 14px;font:400 13px 'Space Grotesk',sans-serif;line-height:1.5;color:var(--fg);resize:none;width:100%;">${esc(s.notaVaro)}</textarea></div>
+      <button data-action="scaricaRotta" style="padding:13px;border:1.5px solid var(--line);background:transparent;color:${V.ok?'var(--fg)':'var(--muted)'};border-radius:12px;font:600 13px 'Space Grotesk',sans-serif;cursor:${V.ok?'pointer':'default'};">Scarica rotta.yaml</button>
+      <button data-action="varoAvanti2" style="padding:15px;border:none;background:${V.ok?'var(--inksurf)':'var(--track)'};color:${V.ok?'#F5F2EC':'var(--muted)'};border-radius:12px;font:600 15px 'Space Grotesk',sans-serif;cursor:${V.ok?'pointer':'default'};margin-top:auto;flex-shrink:0;transition:background .2s ease;">${V.ok?'Continua · i guardrail':(V.msg||'Completa la rotta per continuare')}</button>
+    </div>`;
+  } else if(s.varoStep===3){
+    const L = varoLimitiVal();
+    const limRow = (label, field, val, tetto, unit, border) => `
+      <div style="display:flex;flex-direction:column;gap:2px;padding:12px 0;${border?'border-bottom:1px solid var(--line);':''}">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+          <span style="font:500 13px 'Space Grotesk',sans-serif;">${label}</span>
+          <span style="display:flex;align-items:baseline;gap:4px;"><input data-action="setVaroLim" data-idx="${field}" id="in-vl${field}" value="${esc(val)}" inputmode="decimal" style="background:transparent;border:none;padding:0;font:600 14px 'JetBrains Mono',monospace;color:var(--fg);width:64px;text-align:right;"><span style="font:400 12px 'Space Grotesk',sans-serif;color:var(--muted);">${unit}</span></span>
+        </div>
+        <span style="font:400 10px 'Space Grotesk',sans-serif;color:var(--muted);">tetto nel codice: ${tetto}${unit} · puoi solo restringere</span>
+      </div>`;
+    step=`<div style="display:flex;flex-direction:column;gap:14px;padding:18px 24px 28px 24px;flex:1;min-height:0;overflow-y:auto;animation:fadeIn .3s ease;">
+      <div style="display:flex;flex-direction:column;gap:6px;"><div style="font:700 24px 'Space Grotesk',sans-serif;">I limiti, prima di partire</div><div style="font:400 13px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.6;">I tetti nel codice sono invalicabili. Qui puoi solo <strong style="font-weight:600;">restringerli</strong> — allargarli, dopo, costa 72 ore e doppia conferma. Decidilo ora, a mente fredda.</div></div>
+      <div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 16px;display:flex;flex-direction:column;">
+        ${limRow('Importo massimo per ordine','ordine', s.varoLimiti.ordine===''?L.cur.ordine:s.varoLimiti.ordine, L.tetti.max_order_eur,' €',1)}
+        ${limRow('Budget giornaliero','giorno', s.varoLimiti.giorno===''?L.cur.giorno:s.varoLimiti.giorno, L.tetti.max_daily_eur,' €',1)}
+        ${limRow('Ordini per run','nrun', s.varoLimiti.nrun===''?L.cur.nrun:s.varoLimiti.nrun, L.tetti.max_orders_per_run,'',1)}
+        ${kv('Titoli ammessi','solo quelli in rotta',1)}${kv('Finestra oraria','15:30 – 22:00',0)}
+      </div>
+      ${L.errs.length?`<div style="font:400 12px 'Space Grotesk',sans-serif;color:var(--brassText);line-height:1.5;">${L.errs.map(esc).join(' · ')}</div>`:''}
+      <div style="background:var(--inksurf);border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;">${ANCHOR_SMALL(false).replace('width="15" height="15"','width="22" height="22"')}<span style="font:400 12px 'Space Grotesk',sans-serif;color:#C7CDD8;line-height:1.5;">L'àncora automatica è inclusa e non si disattiva: drawdown, dati incoerenti, heartbeat, cambio stimato.</span></div>
+      <button data-action="varoAvanti3" style="padding:15px;border:none;background:${L.ok?'var(--inksurf)':'var(--track)'};color:${L.ok?'#F5F2EC':'var(--muted)'};border-radius:12px;font:600 15px 'Space Grotesk',sans-serif;cursor:${L.ok?'pointer':'default'};margin-top:auto;flex-shrink:0;">${L.ok?'Continua · riepilogo del varo':'Rientra nei tetti per continuare'}</button>
+    </div>`;
+  } else {
+    const L4 = varoLimitiVal();
+    const T4 = L4.tetti;
+    const ristretti = [];
+    if(L4.cur.ordine < T4.max_order_eur) ristretti.push(`timone limiti --restringi max_order_eur=${L4.cur.ordine}`);
+    if(L4.cur.giorno < T4.max_daily_eur) ristretti.push(`timone limiti --restringi max_daily_eur=${L4.cur.giorno}`);
+    if(L4.cur.nrun < T4.max_orders_per_run) ristretti.push(`timone limiti --restringi max_orders_per_run=${L4.cur.nrun}`);
+    step=`<div style="display:flex;flex-direction:column;gap:14px;padding:18px 24px 28px 24px;flex:1;min-height:0;overflow-y:auto;animation:fadeIn .3s ease;">
+      <div style="display:flex;flex-direction:column;gap:6px;"><div style="font:700 24px 'Space Grotesk',sans-serif;">Pronti al varo</div><div style="font:400 13px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.6;">Rileggi tutto. Dopo il varo, questa pagina diventa la v1 della Rotta — datata e sigillata nel Giornale.</div></div>
+      <div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 16px;display:flex;flex-direction:column;">${sum('Broker','Alpaca · paper',1)}${sum('Rotta v1',(()=>{const V=varoValidation();return V.ok?esc(V.targets.map(r=>`${r.t} ${fmtN(r.p,0)}`).join(' · '))+` · ${fmtN(V.importo,0)}&nbsp;€`:'—';})(),1)}${sum('Limiti',`${fmtN(L4.cur.ordine,0)}&nbsp;€/ordine · ${fmtN(L4.cur.giorno,0)}&nbsp;€/giorno · max&nbsp;${L4.cur.nrun}`,1)}${sum('Primo run','domani · 16:00',0)}</div>
+      ${ristretti.length?`<div style="display:flex;flex-direction:column;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;"><span style="font:600 10px 'Space Grotesk',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);">Per applicare i limiti ristretti (da terminale)</span>${ristretti.map(c=>`<span style="font:500 11px 'JetBrains Mono',monospace;">${esc(c)}</span>`).join('')}</div>`:''}
+      ${s.notaVaro.trim().length>0?`<div style="display:flex;flex-direction:column;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;"><span style="font:600 10px 'Space Grotesk',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);">Nota del capitano · v1</span><span style="font:400 12px 'Space Grotesk',sans-serif;line-height:1.5;">«${esc(s.notaVaro)}»</span></div>`:''}
+      <div style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;"><span style="width:7px;height:7px;border-radius:50%;background:#A98343;flex-shrink:0;"></span><span style="font:400 12px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.45;">Il varo non compra nulla adesso: mette in mare il motore, che agirà solo al primo run in orario.</span></div>
+      <button data-action="vara" style="${varaStyle}">${s.varando?'Sigillo della v1 in corso…':'Vara il motore'}</button>
+    </div>`;
+  }
+  return `<div style="display:flex;flex-direction:column;height:100%;">
+    <div style="display:flex;align-items:center;gap:10px;padding:26px 24px 4px 24px;flex-shrink:0;"><span style="font:600 12px 'JetBrains Mono',monospace;color:var(--muted);">${s.varoStep} · 4</span><div style="flex:1;display:flex;gap:4px;"><span style="${seg(s.varoStep>=1)}"></span><span style="${seg(s.varoStep>=2)}"></span><span style="${seg(s.varoStep>=3)}"></span><span style="${seg(s.varoStep>=4)}"></span></div></div>
+    ${step}
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:0 24px 22px 24px;flex-shrink:0;"><span data-action="varoIndietro" style="font:500 13px 'Space Grotesk',sans-serif;color:var(--muted);cursor:pointer;visibility:${s.varoStep>1?'visible':'hidden'};">← indietro</span><span style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);">Timone v0.5 · il varo · paper trading</span></div>
+  </div>`;
+}
+
+function varataScreen(){
+  return `<div style="display:flex;flex-direction:column;height:100%;background:var(--inksurf);position:relative;animation:fadeIn .5s ease;">
+    <svg style="position:absolute;inset:0;width:100%;height:100%;opacity:0.07;" viewBox="0 0 390 800" fill="none" stroke="#F5F2EC" stroke-width="1"><line x1="0" y1="200" x2="390" y2="200"></line><line x1="0" y1="400" x2="390" y2="400"></line><line x1="0" y1="600" x2="390" y2="600"></line><line x1="130" y1="0" x2="130" y2="800"></line><line x1="260" y1="0" x2="260" y2="800"></line></svg>
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;padding:0 36px;text-align:center;position:relative;">
+      ${compass(96,true,'#F5F2EC')}
+      <div style="display:flex;flex-direction:column;gap:8px;"><div style="font:700 26px 'Space Grotesk',sans-serif;color:#F5F2EC;">Motore in mare</div><div style="font:400 14px 'Space Grotesk',sans-serif;color:#8B94A6;line-height:1.65;">La rotta v1 è sigillata nel Giornale<br>come primo anello della catena.</div></div>
+      <div style="display:flex;align-items:center;gap:10px;background:rgba(245,242,236,0.06);border:1px solid rgba(245,242,236,0.12);border-radius:12px;padding:12px 18px;"><svg width="15" height="15" viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="19" stroke="#C9A35E" stroke-width="3" stroke-dasharray="4 3"></circle><circle cx="24" cy="24" r="7" fill="#C9A35E"></circle></svg><span style="font:500 12px 'JetBrains Mono',monospace;color:#C7CDD8;">v1 · oggi · ⌗ 0000…0000 → ⌗ 8c1d…44f0</span></div>
+      <div style="display:flex;flex-direction:column;gap:4px;"><div style="font:600 11px 'Space Grotesk',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:#8B94A6;">Primo run</div><div style="font:600 20px 'JetBrains Mono',monospace;color:#F5F2EC;">domani · 16:00</div></div>
+      <div style="font:400 12px 'Space Grotesk',sans-serif;color:#8B94A6;line-height:1.6;">Nessuna celebrazione, nessun conto alla rovescia da guardare.<br>Il silenzio, da qui in poi, è una buona notizia.</div>
+    </div>
+    <div style="padding:0 24px 28px 24px;position:relative;"><button data-action="entraConsole" style="width:100%;padding:15px;border:1.5px solid rgba(245,242,236,0.25);background:transparent;color:#F5F2EC;border-radius:12px;font:600 14px 'Space Grotesk',sans-serif;cursor:pointer;">Entra nella console</button></div>
+  </div>`;
+}
+
+/* ---------------- BUSSOLA ---------------- */
+function bussolaTab(d){
+  const valueAnim = anim.value; anim.value=false;
+  const valore = d.primoGiorno ? '0,00 €' : (LIVE ? fmtEUR(LIVE.valore_eur) : '198,98 €');
+  let head = `<div style="display:flex;flex-direction:column;gap:4px;">
+    <div style="font:600 11px 'Space Grotesk',sans-serif;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);">Valore di bordo · paper</div>
+    <div style="font:600 52px 'JetBrains Mono',monospace;letter-spacing:-0.02em;line-height:1.05;${valueAnim?'animation:valueLock .8s cubic-bezier(0.22,1,0.36,1) both;':''}">${valore}</div>`;
+  if(d.aRegime){
+    const pnl = LIVE ? LIVE.pnl_eur : 5.02;
+    const pnlTxt = LIVE ? fmtSign(LIVE.pnl_eur) : '+5,02 €';
+    const sub = LIVE ? `dal varo · versati ${fmtN(LIVE.versati_eur)}&nbsp;€` : 'dal varo · versati 193,96&nbsp;€ in 47 run';
+    head += `<div style="display:flex;align-items:baseline;gap:8px;font:400 13px 'Space Grotesk',sans-serif;color:var(--muted);"><span style="font:600 14px 'JetBrains Mono',monospace;color:${pnl>=0?'var(--ok)':'var(--neg)'};">${pnlTxt.replace(' ','&nbsp;')}</span><span>${sub}</span></div>`;
+  }
+  else head += `<div style="font:400 13px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.55;">Il motore non ha ancora comprato nulla.<br>Primo run <strong style="font-weight:600;color:var(--fg);">domani alle 16:00</strong> — fino ad allora, niente da guardare.</div>`;
+  head += `</div>`;
+
+  let body = '';
+  if(d.aRegime){
+    const rrow=(t,sub,val,col,b)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:13px 0;${b?'border-bottom:1px solid var(--line);':''}"><div style="display:flex;flex-direction:column;gap:1px;"><span style="font:500 13px 'Space Grotesk',sans-serif;">${t}</span><span style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);">${sub}</span></div><span style="font:600 15px 'JetBrains Mono',monospace;color:${col};">${val}</span></div>`;
+    const pos = posData.map((p,i)=>{
+      const left = `calc(50% + ${((p.pesoN-50)*6)}px - 2.5px)`;
+      const rowStyle=`display:flex;justify-content:space-between;align-items:center;padding:13px 0;gap:12px;${i<posData.length-1?'border-bottom:1px solid var(--line);':''}`;
+      return `<div style="${rowStyle}"><div style="display:flex;flex-direction:column;gap:2px;"><span style="font:600 14px 'Space Grotesk',sans-serif;">${p.ticker}</span><span style="font:400 11px 'JetBrains Mono',monospace;color:var(--muted);">${p.quote}</span></div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;"><span style="font:600 14px 'JetBrains Mono',monospace;">${p.valore}</span>
+        <div style="display:flex;align-items:center;gap:8px;"><span style="font:400 10px 'JetBrains Mono',monospace;color:var(--muted);">${p.pesoN.toFixed(1).replace('.',',')}% · target 50</span>
+        <div style="position:relative;width:56px;height:10px;flex-shrink:0;"><div style="position:absolute;left:0;right:0;top:4.5px;height:1px;background:var(--track);"></div><div style="position:absolute;left:50%;top:1px;width:1.5px;height:8px;background:#B9B2A4;"></div><div style="position:absolute;top:2.5px;width:5px;height:5px;border-radius:50%;background:var(--fg);left:${left};"></div></div></div></div></div>`;
+    }).join('');
+    body = `
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="font:600 11px 'Space Grotesk',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);">Da dove viene il rendimento</div>
+        <div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 16px;display:flex;flex-direction:column;">
+          ${(()=>{
+            const ti = LIVE ? LIVE.pnl_titoli_eur : 6.42;
+            const ca = LIVE ? LIVE.pnl_cambio_eur : -1.40;
+            const rate = LIVE ? fmtN(LIVE.cambio.rate, 4) : '1,1415';
+            const badge = (LIVE && LIVE.cambio.stimato) ? 'stimato' : 'BCE ufficiale';
+            return rrow('Titoli','variazione dei prezzi in USD', fmtSign(ti).replace(' ','&nbsp;'), ti>=0?'var(--ok)':'var(--neg)',1)
+              + rrow('Cambio EUR/USD','effetto valuta sul controvalore', fmtSign(ca).replace(' ','&nbsp;'), ca>=0?'var(--ok)':'var(--neg)',1)
+              + `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;"><span style="font:400 12px 'Space Grotesk',sans-serif;color:var(--muted);">Cambio di oggi</span><span style="display:flex;align-items:center;gap:8px;"><span style="font:500 13px 'JetBrains Mono',monospace;">${rate}</span><span style="font:600 9px 'Space Grotesk',sans-serif;letter-spacing:0.08em;text-transform:uppercase;color:${badge==='stimato'?'var(--brassText)':'var(--muted)'};border:1px solid ${badge==='stimato'?'var(--brassText)':'var(--line)'};border-radius:4px;padding:2px 6px;">${badge}</span></span></div>`;
+          })()}
+        </div>
+        <div style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);">Un rendimento in euro è sempre due storie: i titoli e il cambio. Timone le tiene separate.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="font:600 11px 'Space Grotesk',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);">Posizioni</div>
+        <div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 16px;display:flex;flex-direction:column;">${pos}</div>
+        <div style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);">La tacca è il target; il punto è dove sei. Sotto soglia (5&nbsp;pp) il motore non ribilancia.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="font:600 11px 'Space Grotesk',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);">Ultima voce del Giornale</div>
+        <div data-action="goGiornale" style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;cursor:pointer;">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;"><span style="font:500 12px 'JetBrains Mono',monospace;color:var(--muted);">${runRegime[0]?runRegime[0].data:'—'}</span><svg width="13" height="13" viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="19" stroke="#A98343" stroke-width="3" stroke-dasharray="4 3"></circle><circle cx="24" cy="24" r="7" fill="#A98343"></circle></svg></div>
+          <div style="display:flex;align-items:center;gap:8px;"><span style="width:7px;height:7px;border-radius:50%;background:${runRegime[0]&&runRegime[0].amber?'var(--brassText)':'var(--ok)'};flex-shrink:0;"></span><span style="font:500 14px 'Space Grotesk',sans-serif;">${runRegime[0]?runRegime[0].titolo:'Nessun run ancora'}</span></div>
+          <span style="font:500 12px 'Space Grotesk',sans-serif;color:var(--action);">Giornale completo →</span>
+        </div>
+      </div>`;
+  } else {
+    const sealAnim = anim.seal; anim.seal=false;
+    body = `<div style="display:flex;flex-direction:column;gap:8px;">
+      <div style="font:600 11px 'Space Grotesk',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);">Prima voce del Giornale</div>
+      <div data-action="goGiornale" style="background:var(--inksurf);border-radius:14px;padding:16px;display:flex;align-items:center;gap:14px;cursor:pointer;">
+        <svg width="34" height="34" viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="19" stroke="#C9A35E" stroke-width="2.5" stroke-dasharray="4 3"></circle><path d="M24 17 L24 31 M19 27 C19 30 29 30 29 27 M20 20 L28 20" stroke="#C9A35E" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="120"${sealAnim?' style="animation:sealDraw 1.2s ease-out .3s both;"':''}></path></svg>
+        <div style="display:flex;flex-direction:column;gap:3px;"><span style="font:600 14px 'Space Grotesk',sans-serif;color:#F5F2EC;">Rotta v1 varata e sigillata</span><span style="font:500 11px 'JetBrains Mono',monospace;color:#8B94A6;">⌗ 0000…0000 → ⌗ 8c1d…44f0</span></div>
+      </div>
+      <div style="font:400 12px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.55;">Il portafoglio comparirà qui dopo il primo run, scomposto in titoli e cambio. Nessuna eccezione in corso: il silenzio è una buona notizia.</div>
+    </div>`;
+  }
+  return `<div style="display:flex;flex-direction:column;height:100%;"><div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:16px;padding:22px 20px 24px 20px;">${head}${body}</div></div>`;
+}
+
+/* ---------------- GIORNALE ---------------- */
+function giornaleTab(d){
+  const s = state;
+  const nSigilli = d.primoGiorno ? 1 : (LIVE ? Math.max(LIVE.catena.sigilli, 1) : 47);
+  let head = '';
+  if(!d.anomala){
+    const sealAnim = anim.seal; anim.seal=false;
+    const titolo = s.verRunning?'Verifica in corso':'Catena integra';
+    const baseSotto = LIVE
+      ? (LIVE.catena.sigilli > 0
+          ? `${LIVE.catena.sigilli} run concatenati · ultimo sigillo ${LIVE.last_seal ? LIVE.last_seal.run_id : '—'}`
+          : 'la catena parte dal prossimo run del motore')
+      : '47 run concatenati · ultimo sigillo mer 8 lug · 16:04';
+    const sotto = s.verRunning ? ('sigillo '+s.verN+' di '+nSigilli+' · run per run, dal varo')
+      : (s.verDone ? (nSigilli+' sigilli verificati adesso · nessuna discrepanza')
+        : (d.primoGiorno ? '1 sigillo · la rotta v1, il primo anello' : baseSotto));
+    const vlabel = s.verRunning?'verifica in corso…':(s.verDone?'Verifica di nuovo →':'Verifica la catena →');
+    head = `<div style="background:var(--inksurf);border-radius:14px;padding:16px;display:flex;align-items:center;gap:14px;"><svg width="38" height="38" viewBox="0 0 48 48" fill="none">${SEAL(sealAnim)}</svg><div style="display:flex;flex-direction:column;gap:3px;flex:1;"><div style="font:600 15px 'Space Grotesk',sans-serif;color:#F5F2EC;">${titolo}</div><div style="font:400 12px 'Space Grotesk',sans-serif;color:#8B94A6;">${sotto}</div><a data-action="verificaCatena" style="font:500 12px 'Space Grotesk',sans-serif;color:#9FB2FF;cursor:pointer;">${vlabel}</a></div></div>`;
+  } else {
+    head = `<div style="background:var(--card);border:1.5px solid #A98343;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px;"><div style="display:flex;align-items:center;gap:12px;"><svg width="34" height="34" viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="19" stroke="#A98343" stroke-width="2.5" stroke-dasharray="4 3"></circle><path d="M17 24 L22 24 M26 24 L31 24" stroke="#A98343" stroke-width="2.5" stroke-linecap="round"></path></svg><div style="display:flex;flex-direction:column;gap:2px;"><div style="font:600 15px 'Space Grotesk',sans-serif;">La catena non torna</div><div style="font:400 12px 'Space Grotesk',sans-serif;color:var(--muted);">Il run del 3 lug non corrisponde al sigillo precedente.</div></div></div><div style="font:400 13px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.55;border-top:1px solid var(--line);padding-top:10px;">I dati restano leggibili e il motore continua a operare. La discrepanza riguarda solo la verifica dello storico: può indicare un file modificato o un ripristino da backup.</div><button data-action="esportaRapporto" style="padding:13px;border:none;background:var(--inksurf);color:#F5F2EC;border-radius:10px;font:600 14px 'Space Grotesk',sans-serif;cursor:pointer;">Esporta il rapporto di verifica</button></div>`;
+  }
+  const primoNote = d.primoGiorno ? `<div style="font:400 12px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.55;padding:2px 2px 0 2px;">Il primo run scriverà qui domani alle 16:00 — proposte, guardrail, esiti, sigillo. Ogni voce si aggancia alla precedente.</div>` : '';
+  const runData = d.primoGiorno ? runPrimo : runRegime;
+  const runs = runData.map(r=>{
+    const expanded = s.expandedRun===r.id;
+    const exp = expanded?`<div style="display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--line);padding-top:12px;margin-top:2px;animation:rowIn .25s ease both;">${r.rows.map(row=>`<div style="display:flex;flex-direction:column;gap:4px;"><div style="font:600 10px 'Space Grotesk',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);">${row.k}</div><div style="font:400 13px 'Space Grotesk',sans-serif;line-height:1.5;">${row.v}</div></div>`).join('')}<div style="display:flex;justify-content:space-between;align-items:center;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 12px;"><span style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);">sigillo del run</span><span style="font:500 11px 'JetBrains Mono',monospace;color:var(--muted);">${r.sigillo}</span></div></div>`:'';
+    return `<div data-action="toggleRun" data-id="${r.id}" style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;cursor:pointer;"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;"><span style="font:500 12px 'JetBrains Mono',monospace;color:var(--muted);">${r.data}</span><span style="display:flex;align-items:center;gap:10px;"><svg width="13" height="13" viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="19" stroke="#A98343" stroke-width="3" stroke-dasharray="4 3"></circle><circle cx="24" cy="24" r="7" fill="#A98343"></circle></svg><span style="font:600 12px 'Space Grotesk',sans-serif;color:var(--muted);">${expanded?'chiudi ↑':'↓'}</span></span></div><div style="display:flex;align-items:center;gap:8px;"><span style="${dot(r.amber?'var(--brassText)':'var(--ok)')}"></span><span style="font:500 14px 'Space Grotesk',sans-serif;">${r.titolo}</span></div>${exp}</div>`;
+  }).join('');
+  return `<div style="display:flex;flex-direction:column;height:100%;"><div style="display:flex;flex-direction:column;gap:2px;padding:14px 20px 4px 20px;flex-shrink:0;"><div style="font:700 18px 'Space Grotesk',sans-serif;">Giornale di bordo</div><div style="font:400 12px 'Space Grotesk',sans-serif;color:var(--muted);">Ogni run, spiegato e sigillato.</div></div><div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding:12px 20px 24px 20px;">${head}${primoNote}${runs}</div></div>`;
+}
+
+/* ---------------- ROTTA ---------------- */
+function rottaTab(d){
+  const s = state;
+  const LR = (LIVE && LIVE.rotta && LIVE.rotta.attiva && d.scenario==='normale') ? LIVE.rotta : null;
+  const quarOn = LR ? !!LR.quarantena : s.quarantena;
+  const badge = quarOn?'quarantena attiva':(LR?`v${LR.attiva.v} operativa`:(d.primoGiorno?'v1 operativa':'v3 operativa'));
+  const badgeStyle=`font:600 10px 'Space Grotesk',sans-serif;letter-spacing:0.08em;text-transform:uppercase;color:${quarOn?'var(--brassText)':'var(--muted)'};border:1px solid ${quarOn?'var(--brassText)':'var(--line)'};border-radius:5px;padding:3px 7px;`;
+  const opTit = LR ? `v${LR.attiva.v} · operativa` : (d.primoGiorno?'v1 · operativa':'v3 · operativa');
+  const opSot = LR ? esc(LR.attiva.descr) : (d.primoGiorno?'NVDA 60 · SPY 40 · 50 €/giorno · soglia 3 pp':'NVDA 50 · SPY 50 · 100 €/giorno · soglia 5 pp');
+  const opDal = LR ? `dal ${esc(LR.attiva.data)}` : (d.primoGiorno?'da oggi':'dal 12 giu');
+  const quarLive = (LR && LR.quarantena) ? `<div style="background:var(--card);border:1.5px solid #A98343;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px;">
+      <div style="font:600 11px 'Space Grotesk',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:var(--brassText);">In quarantena · dry-run reale</div>
+      <div style="font:600 15px 'Space Grotesk',sans-serif;">candidata · attiva fra ${LR.quarantena.giorni_residui} giorni</div>
+      <div style="font:400 12px 'Space Grotesk',sans-serif;color:var(--muted);">${esc(LR.quarantena.descr)}</div>
+      <div style="position:relative;height:8px;border-radius:4px;background:var(--track);overflow:hidden;"><div style="position:absolute;left:0;top:0;bottom:0;width:${Math.round(100*(LR.quarantena.giorni-LR.quarantena.giorni_residui)/LR.quarantena.giorni)}%;border-radius:4px;background:#A98343;animation:maturaPulse 7s ease-in-out infinite;"></div></div>
+      <div style="font:400 12px 'Space Grotesk',sans-serif;line-height:1.5;">«${esc(LR.quarantena.nota)}»</div>
+      <div style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);">Gestione da terminale: timone rotta --conferma / --annulla</div>
+    </div>` : '';
+  const quar = s.quarantena?`<div style="background:var(--card);border:1.5px solid #A98343;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;animation:fadeIn .3s ease;"><div style="display:flex;flex-direction:column;gap:3px;"><div style="font:600 11px 'Space Grotesk',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:var(--brassText);">In quarantena</div><div style="font:600 15px 'Space Grotesk',sans-serif;">v4 in prova · attiva fra 7 giorni</div><div style="font:400 12px 'Space Grotesk',sans-serif;color:var(--muted);">gira in dry-run da oggi · nessun ordine reale nasce dalla prova</div></div><div style="position:relative;height:8px;border-radius:4px;background:var(--track);overflow:hidden;"><div style="position:absolute;left:0;top:0;bottom:0;width:4%;border-radius:4px;background:#A98343;animation:maturaPulse 7s ease-in-out infinite;"></div></div><div style="display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid var(--line);padding-top:10px;"><span style="font:400 13px 'Space Grotesk',sans-serif;color:var(--muted);">Importo per run</span><span style="display:flex;gap:22px;"><span style="font:500 13px 'JetBrains Mono',monospace;">100&nbsp;€</span><span style="font:600 13px 'JetBrains Mono',monospace;color:var(--brassText);">150&nbsp;€</span></span></div><div style="font:400 12px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.5;">Ogni giorno il dry-run mostra cosa avrebbe fatto la v4. La v3 resta operativa finché la quarantena non matura.</div><button data-action="annullaQuarantena" style="padding:12px;border:1.5px solid var(--line);background:transparent;color:var(--muted);border-radius:10px;font:600 13px 'Space Grotesk',sans-serif;cursor:pointer;">Annulla la quarantena</button></div>`:'';
+  const verList = LR
+    ? LR.versioni.map(v=>({id:'v'+v.v, titolo:`v${v.v} · ${esc(v.data)}`, sotto:esc(v.descr), nota:v.nota}))
+    : (d.primoGiorno?[{id:'v1',titolo:'v1 · varo · oggi',sotto:'NVDA 60 · SPY 40 · 50 €/giorno · soglia 3 pp',nota:(s.notaVaro.trim()||'Prima rotta: piccola, quotidiana, per imparare a fidarmi del motore prima che dei rendimenti.')}]:verRegime);
+  const versioni = verList.map(v=>{
+    const expanded = s.expandedVer===v.id;
+    const exp = expanded?`<div style="display:flex;flex-direction:column;gap:4px;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 12px;animation:rowIn .25s ease both;"><span style="font:600 10px 'Space Grotesk',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);">Nota del capitano</span><span style="font:400 12px 'Space Grotesk',sans-serif;line-height:1.5;">«${esc(v.nota)}»</span></div>`:'';
+    return `<div data-action="toggleVer" data-id="${v.id}" style="display:flex;flex-direction:column;gap:8px;padding:13px 0;border-bottom:1px solid var(--line);cursor:pointer;"><div style="display:flex;justify-content:space-between;align-items:center;"><div style="display:flex;flex-direction:column;gap:2px;"><span style="font:600 13px 'JetBrains Mono',monospace;">${v.titolo}</span><span style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);">${v.sotto}</span></div><span style="font:600 12px 'Space Grotesk',sans-serif;color:var(--muted);">${expanded?'chiudi ↑':'↓'}</span></div>${exp}</div>`;
+  }).join('');
+  const azione = LR
+    ? (LR.quarantena ? '' : `<div style="font:400 12px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.5;">Per proporre una modifica: cambia <span style="font-family:'JetBrains Mono',monospace;">rotta.yaml</span> e lancia <span style="font-family:'JetBrains Mono',monospace;">timone rotta --proponi --nota "…"</span> — 7 giorni di dry-run prima di prendere il mare.</div>`)
+    : (s.quarantena?'':`<button data-action="apriQuarantena" style="padding:14px;border:1.5px solid var(--fg);background:transparent;color:var(--fg);border-radius:12px;font:600 14px 'Space Grotesk',sans-serif;cursor:pointer;">Metti in prova una modifica</button>`);
+  return `<div style="display:flex;flex-direction:column;height:100%;"><div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px 4px 20px;flex-shrink:0;"><div style="font:700 18px 'Space Grotesk',sans-serif;">Rotta</div><span style="${badgeStyle}">${badge}</span></div><div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding:12px 20px 24px 20px;"><div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;"><div style="display:flex;flex-direction:column;gap:2px;"><span style="font:600 13px 'Space Grotesk',sans-serif;">${opTit}</span><span style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);">${opSot}</span></div><span style="font:500 11px 'JetBrains Mono',monospace;color:var(--muted);">${opDal}</span></div>${LR?quarLive:quar}<div style="display:flex;flex-direction:column;gap:8px;"><div style="font:600 11px 'Space Grotesk',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);">Storico versioni</div><div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 16px;display:flex;flex-direction:column;">${versioni}</div></div>${azione}<div style="font:400 12px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.5;">Ogni modifica alla Rotta è datata, motivata e confrontabile. Prima di toccare capitale, passa dalla quarantena in dry-run.</div></div></div>`;
+}
+
+/* ---------------- SICUREZZA ---------------- */
+function sicurezzaTab(d){
+  const s = state;
+  const badge = d.ancoraGiu?'àncora giù':'tutto attivo';
+  const badgeStyle=`font:600 10px 'Space Grotesk',sans-serif;letter-spacing:0.08em;text-transform:uppercase;color:${d.ancoraGiu?'var(--brassText)':'var(--ok)'};border:1px solid ${d.ancoraGiu?'var(--brassText)':'var(--line)'};border-radius:5px;padding:3px 7px;`;
+  const perche = d.ancoraGiu?`<div style="background:var(--card);border:1.5px solid #A98343;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px;"><div style="font:600 11px 'Space Grotesk',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:var(--brassText);">Perché è giù</div><div style="font:400 13px 'Space Grotesk',sans-serif;line-height:1.55;"><strong style="font-weight:600;">Dati broker incoerenti</strong> · calata da sola oggi alle 16:02.<br>Scarto rilevato: 12,40&nbsp;€ tra saldo e ultimo fill.</div><div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line);padding-top:10px;"><span style="font:400 12px 'Space Grotesk',sans-serif;color:var(--muted);">Stato attuale della verifica</span><span style="display:flex;align-items:center;gap:6px;font:500 12px 'Space Grotesk',sans-serif;color:var(--ok);"><span style="width:6px;height:6px;border-radius:50%;background:var(--ok);"></span>dati coerenti da 2&nbsp;h</span></div><button data-action="apriRialza" style="padding:13px;border:none;background:var(--inksurf);color:#F5F2EC;border-radius:10px;font:600 14px 'Space Grotesk',sans-serif;cursor:pointer;">Rialza l'àncora</button></div>`:'';
+  const LL = (LIVE && LIVE.limiti && d.scenario==='normale') ? LIVE.limiti : null;
+  const importoMax = LL ? fmtN(LL.effettivi.max_order_eur,0)+' €' : ((s.coolingEsito==='ok')?'80 €':'60 €');
+  const budgetG = LL ? fmtN(LL.effettivi.max_daily_eur,0)+'&nbsp;€' : '100&nbsp;€';
+  const ordiniRun = LL ? 'max&nbsp;'+LL.effettivi.max_orders_per_run : 'max&nbsp;2';
+  const finestra = LL ? LL.finestra.replace(/ /g,'&nbsp;') : '15:30 – 22:00';
+  const titoliAmmessi = (LIVE && LIVE.posizioni && LIVE.posizioni.length && d.scenario==='normale') ? LIVE.posizioni.map(p=>p.ticker).join(' · ') : 'NVDA · SPY';
+  const grSommario = d.primoGiorno?'5 regole · dal varo, valori prudenti':('5 regole · '+(LL?fmtN(LL.effettivi.max_order_eur,0):((s.coolingEsito==='ok')?'80':'60'))+' €/ordine · '+(LL?fmtN(LL.effettivi.max_daily_eur,0):'100')+' €/giorno');
+  const grFermato = d.primoGiorno?'nessun ordine ancora proposto':(LL?('tetto nel codice: '+fmtN(LL.tetti.max_order_eur,0)+' €, mai superabile'):'fermato 1 ordine questo mese');
+  const grBar=(n,v,b)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;${b?'border-top:1px solid var(--line);':''}"><span style="font:500 13px 'Space Grotesk',sans-serif;">${n}</span><span style="font:600 14px 'JetBrains Mono',monospace;">${v}</span></div>`;
+  const guardrail = `<div style="background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;"><div data-action="toggleGuardrail" style="display:flex;justify-content:space-between;align-items:center;padding:15px 16px;cursor:pointer;"><div style="display:flex;flex-direction:column;gap:2px;"><span style="font:600 14px 'Space Grotesk',sans-serif;">Guardrail attivi</span><span style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);">${grSommario}</span></div><span style="font:600 12px 'Space Grotesk',sans-serif;color:var(--muted);">${s.guardrailOpen?'chiudi ↑':'↓'}</span></div>${s.guardrailOpen?`<div style="padding:0 16px 6px 16px;display:flex;flex-direction:column;animation:rowIn .25s ease both;"><div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-top:1px solid var(--line);"><div style="display:flex;flex-direction:column;gap:2px;"><span style="font:500 13px 'Space Grotesk',sans-serif;">Importo massimo per ordine</span><span style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);">${grFermato}</span></div><span style="font:600 14px 'JetBrains Mono',monospace;">${importoMax}</span></div>${grBar('Budget giornaliero',budgetG,1)}${grBar('Titoli ammessi',titoliAmmessi,1)}${grBar('Finestra oraria',finestra,1)}${grBar('Ordini per run',ordiniRun,1)}<div style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);padding:10px 0 8px 0;border-top:1px solid var(--line);">Renderli più permissivi richiede 72 ore e doppia conferma. Restringerli è immediato.${LL?' Da terminale: timone limiti.':''}</div></div>`:''}</div>`;
+
+  let cooling='';
+  if(LL){
+    if(LL.cooling){
+      const c = LL.cooling;
+      const pct = Math.max(2, Math.round(100*(1 - c.ore_residue/72)));
+      const maturata = c.ore_residue <= 0;
+      cooling = `<div style="background:var(--card);border:1.5px solid #A98343;border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:14px;">
+        <div style="display:flex;flex-direction:column;gap:4px;"><div style="font:600 11px 'Space Grotesk',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:var(--brassText);">${maturata?'Richiesta maturata':'Richiesta in maturazione'}</div><div style="font:600 16px 'Space Grotesk',sans-serif;">${esc(c.campo)}</div>
+        <div style="display:flex;align-items:baseline;gap:10px;"><span style="font:600 22px 'JetBrains Mono',monospace;color:var(--muted);text-decoration:line-through;text-decoration-thickness:1.5px;">${fmtN(c.da,0)}</span><span style="font:400 14px 'Space Grotesk',sans-serif;color:var(--muted);">→</span><span style="font:700 26px 'JetBrains Mono',monospace;">${fmtN(c.a,0)}</span></div></div>
+        <div style="display:flex;flex-direction:column;gap:7px;"><div style="position:relative;height:8px;border-radius:4px;background:var(--track);overflow:hidden;"><div style="position:absolute;left:0;top:0;bottom:0;width:${maturata?100:pct}%;border-radius:4px;background:#A98343;${maturata?'':'animation:maturaPulse 7s ease-in-out infinite;'}"></div></div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;"><span style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);">richiesta il ${esc((c.richiesta_il||'').slice(0,10))}</span><span style="font:600 12px 'JetBrains Mono',monospace;">${maturata?'matura · timone limiti --conferma':('matura fra '+Math.ceil(c.ore_residue)+' h')}</span></div></div>
+        <div style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);">Gestione da terminale: timone limiti --conferma / --annulla</div></div>`;
+    } else {
+      cooling = `<div style="font:400 12px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.5;">Per un limite più largo: <span style="font-family:'JetBrains Mono',monospace;">timone limiti --richiedi campo=valore</span> — matura in 72 ore, mai oltre il tetto nel codice.</div>`;
+    }
+  } else if(s.cooling || d.coolingMaturata){
+    const intest = d.coolingMaturata?'Richiesta maturata':'Richiesta in maturazione';
+    const quando = d.coolingMaturata?'richiesta 3 giorni fa':'richiesta oggi · adesso';
+    const scad = d.coolingMaturata?'maturata · ora tocca a te':'attivo fra 72 h';
+    const testo = d.coolingMaturata?'Le 72 ore sono passate. Nulla cambia finché non firmi la seconda conferma: il motore continua a lavorare con 60 €.':'Il tempo è la protezione: un limite più largo entra in vigore solo dopo 72 ore e una seconda conferma. Fino ad allora vale 60 €.';
+    const prog = `position:absolute;left:0;top:0;bottom:0;width:${d.coolingMaturata?'100%':'2%'};border-radius:4px;background:#A98343;${d.coolingMaturata?'':'animation:maturaPulse 7s ease-in-out infinite;'}transition:width .6s ease;`;
+    const secondaBtn = d.coolingMaturata?`<button data-action="confermaSeconda" style="padding:13px;border:none;background:var(--fg);color:var(--paper);border-radius:10px;font:600 14px 'Space Grotesk',sans-serif;cursor:pointer;">Conferma ora · il limite passa a 80&nbsp;€</button>`:'';
+    cooling = `<div style="background:var(--card);border:1.5px solid #A98343;border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:14px;animation:fadeIn .3s ease;"><div style="display:flex;flex-direction:column;gap:4px;"><div style="font:600 11px 'Space Grotesk',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:var(--brassText);">${intest}</div><div style="font:600 16px 'Space Grotesk',sans-serif;">Importo massimo per ordine</div><div style="display:flex;align-items:baseline;gap:10px;"><span style="font:600 22px 'JetBrains Mono',monospace;color:var(--muted);text-decoration:line-through;text-decoration-thickness:1.5px;">60&nbsp;€</span><span style="font:400 14px 'Space Grotesk',sans-serif;color:var(--muted);">→</span><span style="font:700 26px 'JetBrains Mono',monospace;">80&nbsp;€</span></div></div><div style="display:flex;flex-direction:column;gap:7px;"><div style="position:relative;height:8px;border-radius:4px;background:var(--track);overflow:hidden;"><div style="${prog}"></div></div><div style="display:flex;justify-content:space-between;align-items:baseline;"><span style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);">${quando}</span><span style="font:600 12px 'JetBrains Mono',monospace;">${scad}</span></div></div><div style="font:400 13px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.55;">${testo}</div>${secondaBtn}<button data-action="annullaCooling" style="padding:13px;border:1.5px solid var(--line);background:transparent;color:var(--muted);border-radius:10px;font:600 14px 'Space Grotesk',sans-serif;cursor:pointer;">Annulla la richiesta</button></div>`;
+  } else {
+    cooling = `<button data-action="apriCooling" style="padding:14px;border:1.5px solid var(--fg);background:transparent;color:var(--fg);border-radius:12px;font:600 14px 'Space Grotesk',sans-serif;cursor:pointer;">Chiedi un limite più largo</button>`;
+  }
+
+  const ancoraAutoSotto = d.ancoraGiu?'scattata oggi · dati broker incoerenti':(s.ancoraRialzata?'rialzata da te · annotato nel Giornale':'a riposo · nessuna regola scattata dal varo');
+  const autoRow=(k,v,b)=>`<div style="display:flex;justify-content:space-between;align-items:baseline;padding:11px 0;${b?'border-bottom:1px solid rgba(245,242,236,0.08);':''}"><span style="font:400 12px 'Space Grotesk',sans-serif;color:#C7CDD8;">${k}</span><span style="font:600 12px 'JetBrains Mono',monospace;color:#F5F2EC;">${v}</span></div>`;
+  const ancora = `<div style="background:var(--inksurf);border-radius:14px;overflow:hidden;"><div data-action="toggleAncora" style="display:flex;justify-content:space-between;align-items:center;padding:15px 16px;cursor:pointer;"><div style="display:flex;align-items:center;gap:10px;"><svg width="22" height="22" viewBox="0 0 48 48" fill="none"><path d="M24 10 L24 38 M16 32 C16 38 32 38 32 32 M17 17 L31 17" stroke="#F5F2EC" stroke-width="2.5" stroke-linecap="round"></path><circle cx="24" cy="12" r="4" stroke="#F5F2EC" stroke-width="2.5"></circle></svg><div style="display:flex;flex-direction:column;gap:1px;"><span style="font:600 14px 'Space Grotesk',sans-serif;color:#F5F2EC;">Àncora automatica</span><span style="font:400 11px 'Space Grotesk',sans-serif;color:#8B94A6;">${ancoraAutoSotto}</span></div></div><span style="font:600 12px 'Space Grotesk',sans-serif;color:#8B94A6;">${s.ancoraOpen?'chiudi ↑':'↓'}</span></div>${s.ancoraOpen?`<div style="padding:0 16px 14px 16px;display:flex;flex-direction:column;gap:12px;animation:rowIn .25s ease both;"><div style="display:flex;flex-direction:column;border-top:1px solid rgba(245,242,236,0.14);">${autoRow('Drawdown oltre soglia','−15&nbsp;%',1)}${autoRow('Dati broker incoerenti','subito',1)}${autoRow('Cambio stimato prolungato','5&nbsp;giorni',1)}${autoRow('Run falliti consecutivi','2',0)}</div><div style="font:400 11px 'Space Grotesk',sans-serif;color:#8B94A6;line-height:1.5;">Non si disattiva. Se scatta, la console mostra sempre quale regola e perché. Rialzarla è una decisione tua.</div></div>`:''}</div>`;
+
+  const hbTit = d.hbMancato?'Battito mancato':(d.primoGiorno?'In attesa del primo battito':'Battito regolare');
+  const hbSot = d.hbMancato?'run delle 16:00 non partito · se il silenzio continua, l’àncora cala da sola fra 2 h':(d.primoGiorno?'primo run atteso domani alle 16:00':'ultimo run oggi 16:00 · atteso il prossimo alle 16:00');
+  const hbStroke = d.hbMancato?'var(--brassText)':'var(--ok)';
+  const hbCard = `background:var(--card);border:${d.hbMancato?'1.5px solid #A98343':'1px solid var(--line)'};border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;`;
+  const heartbeat = `<div style="${hbCard}"><svg width="30" height="16" viewBox="0 0 60 24" fill="none"><path d="M2 12 L18 12 L23 4 L30 20 L35 12 L58 12" style="stroke:${hbStroke};" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><div style="display:flex;flex-direction:column;gap:1px;flex:1;"><span style="font:500 13px 'Space Grotesk',sans-serif;">${hbTit}</span><span style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);">${hbSot}</span></div></div>`;
+
+  return `<div style="display:flex;flex-direction:column;height:100%;"><div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px 4px 20px;flex-shrink:0;"><div style="font:700 18px 'Space Grotesk',sans-serif;">Sicurezza</div><span style="${badgeStyle}">${badge}</span></div><div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding:12px 20px 24px 20px;">${perche}${guardrail}${cooling}${ancora}${heartbeat}</div></div>`;
+}
+
+/* ---------------- FISCALE ---------------- */
+function fiscaleTab(d){
+  const drow=(k,v,b)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;${b?'border-bottom:1px solid var(--line);':''}"><span style="font:400 13px 'Space Grotesk',sans-serif;color:var(--muted);">${k}</span><span style="font:600 14px 'JetBrains Mono',monospace;">${v}</span></div>`;
+  let body='';
+  if(d.primoGiorno){
+    body = `<div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:6px;"><div style="font:600 15px 'Space Grotesk',sans-serif;">Niente da dichiarare, per ora</div><div style="font:400 12px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.6;">Il report si costruisce da solo, run dopo run: plusvalenze e minusvalenze al 26&nbsp;%, metodo LIFO, controvalori al cambio BCE del giorno. Lo troverai qui, pronto da consegnare.</div></div>`;
+  } else {
+    const F = LIVE ? LIVE.fiscale : {plusvalenze_eur:1.84, minusvalenze_eur:0, imposta_26_eur:0.48, cambi_stimati:1, operazioni:47, latente_eur:5.02, imposta_latente_eur:1.31, netto_eur:197.67};
+    const stimNote = F.cambi_stimati > 0
+      ? `<div style="padding:12px 16px;border-top:1px dashed var(--brassText);background:rgba(201,163,94,0.07);display:flex;align-items:center;gap:10px;"><span style="width:7px;height:7px;border-radius:50%;background:#A98343;flex-shrink:0;"></span><span style="font:400 12px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.5;"><strong style="font-weight:600;color:var(--fg);">${F.cambi_stimati} operazioni su ${F.operazioni} usano un cambio stimato</strong> (fonte BCE non raggiungibile). Marcate nel report, riga per riga.</span></div>` : '';
+    body = `<div style="background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;"><div style="padding:16px;display:flex;flex-direction:column;gap:2px;border-bottom:1px solid var(--line);"><div style="display:flex;justify-content:space-between;align-items:baseline;"><span style="font:600 14px 'Space Grotesk',sans-serif;">Report annuale · Italia</span><span style="font:500 11px 'JetBrains Mono',monospace;color:var(--muted);">anno ${LIVE?(LIVE.fiscale.anno||2026):2026} · ${F.operazioni} operazioni</span></div><span style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);">Metodo LIFO · controvalori EUR al cambio BCE del giorno di esecuzione</span></div><div style="padding:4px 16px;display:flex;flex-direction:column;">${drow('Plusvalenze realizzate',fmtN(F.plusvalenze_eur)+'&nbsp;€',1)}${drow('Minusvalenze realizzate',fmtN(F.minusvalenze_eur)+'&nbsp;€',1)}${drow('Imposta sostitutiva · 26&nbsp;%',fmtN(F.imposta_26_eur)+'&nbsp;€',1)}${drow('Quadri di riferimento','RT · RW',0)}</div>${stimNote}</div>
+      <button data-action="esportaFiscale" style="padding:14px;border:1.5px solid var(--action);background:transparent;color:var(--action);border-radius:12px;font:600 14px 'Space Grotesk',sans-serif;cursor:pointer;">Esporta il report · CSV + PDF</button>
+      <div style="display:flex;flex-direction:column;gap:8px;"><div style="font:600 11px 'Space Grotesk',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);">Se vendessi ora</div><div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 16px;display:flex;flex-direction:column;">${drow('Plusvalenza latente',fmtN(F.latente_eur)+'&nbsp;€',1)}${drow('Imposta stimata · 26&nbsp;%',fmtN(F.imposta_latente_eur)+'&nbsp;€',1)}<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;"><span style="font:500 13px 'Space Grotesk',sans-serif;">Netto in tasca</span><span style="font:600 15px 'JetBrains Mono',monospace;">${fmtN(F.netto_eur)}&nbsp;€</span></div></div><div style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.5;">È un calcolo, non un invito a vendere. Timone non spinge mai ad agire.</div></div>`;
+  }
+  return `<div style="display:flex;flex-direction:column;height:100%;"><div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px 4px 20px;flex-shrink:0;"><div style="display:flex;align-items:center;gap:10px;"><span data-action="goBussola" style="font:500 13px 'Space Grotesk',sans-serif;color:var(--muted);cursor:pointer;">←</span><div style="font:700 18px 'Space Grotesk',sans-serif;">Fiscale</div></div><span style="font:500 11px 'JetBrains Mono',monospace;color:var(--muted);">anno 2026 · bozza</span></div><div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding:12px 20px 24px 20px;">${body}</div></div>`;
+}
+
+/* ---------------- DIAGNOSTICA ---------------- */
+function diagnosticaTab(d){
+  const s = state;
+  const bolla = s.doctorRunning?'#A98343':'#1E7F4F';
+  const titolo = s.doctorRunning?'Check in corso…':'Tutto in bolla';
+  const sotto = s.doctorRunning?(s.doctorN+' controlli su 7'):"7 controlli su 7 · un'attenzione minore";
+  const meta = s.doctorRunning?'timone doctor · in esecuzione':'ultimo check oggi 14:30 · durata 1,8 s';
+  const rows = checkData.map((c,i)=>{
+    const done = i<s.doctorN;
+    const det = i===6 ? (done?(d.primoGiorno?'catena verificata · 1 sigillo':'catena verificata · 47 run'):'in verifica…') : (done?c.dettaglio:'in verifica…');
+    const dcol = done?(c.ok?'var(--ok)':'var(--brassText)'):'var(--line)';
+    const rowStyle=`display:flex;justify-content:space-between;align-items:center;padding:12px 0;gap:12px;${i<checkData.length-1?'border-bottom:1px solid var(--line);':''}opacity:${done?1:0.55};transition:opacity .25s ease;`;
+    return `<div style="${rowStyle}"><div style="display:flex;flex-direction:column;gap:1px;"><span style="font:500 13px 'Space Grotesk',sans-serif;">${c.nome}</span><span style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);">${det}</span></div><span style="${dot(dcol)}"></span></div>`;
+  }).join('');
+  const btnStyle=`padding:14px;border-radius:12px;border:1.5px solid ${s.doctorRunning?'var(--line)':'var(--action)'};background:transparent;color:${s.doctorRunning?'var(--muted)':'var(--action)'};font:600 14px 'Space Grotesk',sans-serif;cursor:${s.doctorRunning?'default':'pointer'};transition:color .2s ease;`;
+  return `<div style="display:flex;flex-direction:column;height:100%;"><div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px 4px 20px;flex-shrink:0;"><div style="display:flex;align-items:center;gap:10px;"><span data-action="goBussola" style="font:500 13px 'Space Grotesk',sans-serif;color:var(--muted);cursor:pointer;">←</span><div style="font:700 18px 'Space Grotesk',sans-serif;">Diagnostica</div></div><span style="font:500 12px 'JetBrains Mono',monospace;color:var(--muted);">timone doctor</span></div><div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding:12px 20px 24px 20px;"><div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;align-items:center;gap:16px;"><svg width="52" height="52" viewBox="0 0 60 60" fill="none"><rect x="4" y="24" width="52" height="12" rx="6" stroke="currentColor" stroke-width="2.5"></rect><line x1="26" y1="24" x2="26" y2="36" style="stroke:var(--line);" stroke-width="1.5"></line><line x1="34" y1="24" x2="34" y2="36" style="stroke:var(--line);" stroke-width="1.5"></line><circle cx="30" cy="30" r="4" fill="${bolla}"></circle></svg><div style="display:flex;flex-direction:column;gap:3px;"><div style="font:600 16px 'Space Grotesk',sans-serif;">${titolo}</div><div style="font:400 12px 'Space Grotesk',sans-serif;color:var(--muted);">${sotto}</div><div style="font:400 11px 'JetBrains Mono',monospace;color:var(--muted);">${meta}</div></div></div><div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 16px;display:flex;flex-direction:column;">${rows}</div><button data-action="eseguiDoctor" style="${btnStyle}">${s.doctorRunning?'Controlli in corso…':'Esegui di nuovo il check'}</button></div></div>`;
+}
+
+/* ---------------- APP shell ---------------- */
+function appScreen(d){
+  const s = state;
+  const headerAnim = anim.header; anim.header=false;
+  const rail = d.isDesktop ? `<div style="width:190px;flex-shrink:0;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:3px;padding:20px 12px 18px 12px;"><div style="font:600 10px 'Space Grotesk',sans-serif;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);padding:0 10px 8px 10px;">Console</div><div data-action="goBussola" style="${railStyle(s.tab==='bussola')}">Bussola</div><div data-action="goGiornale" style="${railStyle(s.tab==='giornale')}">Giornale</div><div data-action="goRotta" style="${railStyle(s.tab==='rotta')}">Rotta</div><div data-action="goSicurezza" style="${railStyle(s.tab==='sicurezza')}">Sicurezza</div><div style="border-top:1px solid var(--line);margin:10px 10px;"></div><div data-action="goFiscale" style="${railStyle(s.tab==='fiscale')}">Fiscale</div><div data-action="goDiagnostica" style="${railStyle(s.tab==='diagnostica')}">Diagnostica</div><div style="margin-top:auto;font:400 10px 'JetBrains Mono',monospace;color:var(--muted);padding:0 10px;line-height:1.5;">Timone v0.5<br>paper trading</div></div>` : '';
+
+  const statoDot = `width:7px;height:7px;border-radius:50%;background:${(d.ancoraGiu||d.hbMancato)?'var(--brassText)':'var(--ok)'};${(d.ancoraGiu||d.hbMancato)?'':'animation:breath 4s ease-in-out infinite;'}flex-shrink:0;`;
+  const statoLabel = d.ancoraGiu?'àncora giù':(d.hbMancato?'battito mancato':(d.primoGiorno?'in attesa · paper':'operativo · paper'));
+  const avvisi = computeAvvisi(d);
+  const header = `<div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px 6px 20px;flex-shrink:0;">
+    <div data-action="goBussola" style="display:flex;align-items:center;gap:9px;cursor:pointer;">${compass(24,headerAnim)}<div style="font:700 19px 'Space Grotesk',sans-serif;">Timone</div></div>
+    <div style="display:flex;align-items:center;gap:14px;">
+      <span style="display:flex;align-items:center;gap:6px;font:500 11px 'JetBrains Mono',monospace;color:var(--muted);"><span style="${statoDot}"></span>${statoLabel}</span>
+      <span data-action="apriAvvisi" style="position:relative;display:inline-flex;cursor:pointer;padding:2px;">${BELL()}${avvisi.length>0?`<span style="position:absolute;top:1px;right:0;width:7px;height:7px;border-radius:50%;background:#A98343;border:1.5px solid var(--paper);"></span>`:''}</span>
+      <span data-action="apriMenu" style="display:inline-flex;cursor:pointer;padding:2px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5.5" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="12" cy="18.5" r="1.8"></circle></svg></span>
+    </div></div>`;
+  const bannerTxt = (LIVE && LIVE.anchor_down && props.scenario==='normale')
+    ? esc(LIVE.anchor_reason || 'Àncora calata')
+    : 'Àncora calata da sola · dati broker incoerenti · oggi 16:02';
+  const banner = d.ancoraGiu ? `<div style="background:var(--inksurf);color:#F5F2EC;padding:10px 20px;font:500 12px 'Space Grotesk',sans-serif;flex-shrink:0;margin-top:6px;display:flex;align-items:center;gap:10px;">${ANCHOR_SMALL(anim.ancora)}<span>${bannerTxt}</span></div>` : '';
+  if(d.ancoraGiu) anim.ancora=false;
+
+  let tab='';
+  if(s.tab==='bussola') tab=bussolaTab(d);
+  else if(s.tab==='giornale') tab=giornaleTab(d);
+  else if(s.tab==='rotta') tab=rottaTab(d);
+  else if(s.tab==='sicurezza') tab=sicurezzaTab(d);
+  else if(s.tab==='fiscale') tab=fiscaleTab(d);
+  else tab=diagnosticaTab(d);
+
+  const bottomNav = !d.isDesktop ? `<div style="display:flex;border-top:1px solid var(--line);background:var(--paper);padding:10px 0 16px 0;flex-shrink:0;"><div data-action="goBussola" style="${navStyle(s.tab==='bussola')}">Bussola</div><div data-action="goGiornale" style="${navStyle(s.tab==='giornale')}">Giornale</div><div data-action="goRotta" style="${navStyle(s.tab==='rotta')}">Rotta</div><div data-action="goSicurezza" style="${navStyle(s.tab==='sicurezza')}">Sicurezza</div></div>` : '';
+
+  return `<div style="display:flex;flex-direction:row;height:100%;animation:fadeIn .35s ease;">${rail}<div style="display:flex;flex-direction:column;height:100%;flex:1;min-width:0;">${header}${banner}<div style="flex:1;min-height:0;display:flex;flex-direction:column;">${tab}</div>${bottomNav}</div></div>`;
+}
+
+/* ---------------- overlays ---------------- */
+function menuOverlay(d){
+  return `<div data-action="chiudiMenu" style="position:absolute;inset:0;background:rgba(27,38,59,0.14);animation:fadeIn .15s ease;"></div>
+  <div style="position:absolute;top:52px;right:16px;width:220px;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 10px 30px rgba(27,38,59,0.16);padding:6px;display:flex;flex-direction:column;animation:fadeIn .15s ease;">
+    <div data-action="goFiscale" style="display:flex;justify-content:space-between;align-items:center;padding:12px 12px;border-radius:9px;cursor:pointer;"><span style="font:500 14px 'Space Grotesk',sans-serif;">Fiscale</span><span style="font:400 11px 'JetBrains Mono',monospace;color:var(--muted);">2026</span></div>
+    <div data-action="goDiagnostica" style="display:flex;justify-content:space-between;align-items:center;padding:12px 12px;border-radius:9px;cursor:pointer;"><span style="font:500 14px 'Space Grotesk',sans-serif;">Diagnostica</span><span style="${dot('var(--ok)')}"></span></div>
+    <div style="border-top:1px solid var(--line);margin:4px 8px;"></div>
+    ${USER?`<div data-action="authEsci" style="display:flex;justify-content:space-between;align-items:center;padding:12px 12px;border-radius:9px;cursor:pointer;"><span style="font:500 14px 'Space Grotesk',sans-serif;">Esci</span><span style="font:400 11px 'JetBrains Mono',monospace;color:var(--muted);">${esc((USER.email||'').slice(0,18))}</span></div><div style="border-top:1px solid var(--line);margin:4px 8px;"></div>`:''}
+    <div style="padding:9px 12px;font:400 11px 'JetBrains Mono',monospace;color:var(--muted);">Timone v0.5 · paper trading</div>
+  </div>`;
+}
+function avvisiOverlay(d){
+  const avvisi = computeAvvisi(d);
+  let inner='';
+  if(avvisi.length===0){
+    inner = `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:0 40px;text-align:center;"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 10 C6 6.7 8.7 4 12 4 C15.3 4 18 6.7 18 10 L18 15 L19.5 17.5 L4.5 17.5 L6 15 Z"></path><path d="M10.2 20 C10.6 20.8 11.3 21.2 12 21.2 C12.7 21.2 13.4 20.8 13.8 20"></path></svg><div style="display:flex;flex-direction:column;gap:6px;"><div style="font:600 16px 'Space Grotesk',sans-serif;">Nessuna eccezione.</div><div style="font:400 13px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.6;">Il silenzio è una buona notizia.</div></div><div style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.6;max-width:280px;">Timone avvisa solo per eccezioni: guardrail scattato, àncora calata, run fallito, cambio stimato prolungato, fiscale incompleto, cooling-off in maturazione.</div></div>`;
+  } else {
+    const cards = avvisi.map(a=>`<div data-action="avvisoOpen" data-tab="${a.tab}" style="background:var(--card);border:1px solid var(--line);border-left:3px solid #A98343;border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:4px;cursor:pointer;"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;"><span style="font:600 10px 'Space Grotesk',sans-serif;letter-spacing:0.1em;text-transform:uppercase;color:var(--brassText);">${a.tipo}</span><span style="font:400 11px 'JetBrains Mono',monospace;color:var(--muted);">${a.quando}</span></div><span style="font:500 14px 'Space Grotesk',sans-serif;line-height:1.4;">${a.testo}</span><span style="font:500 12px 'Space Grotesk',sans-serif;color:var(--action);">${a.azione}</span></div>`).join('');
+    inner = `<div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:10px 20px 24px 20px;">${cards}<div style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.6;padding:8px 2px;">Solo eccezioni, mai promemoria. Quando la lista è vuota, va tutto bene.</div></div>`;
+  }
+  return `<div style="position:absolute;inset:0;background:var(--paper);display:flex;flex-direction:column;animation:fadeIn .2s ease;"><div style="display:flex;align-items:center;justify-content:space-between;padding:20px 20px 8px 20px;flex-shrink:0;"><div style="font:700 18px 'Space Grotesk',sans-serif;">Avvisi</div><span data-action="chiudiAvvisi" style="font:500 13px 'Space Grotesk',sans-serif;color:var(--muted);cursor:pointer;padding:4px;">chiudi ✕</span></div>${inner}</div>`;
+}
+function sheetShell(inner){
+  return `<div data-action="chiudiSheet" style="position:absolute;inset:0;background:rgba(27,38,59,0.28);animation:fadeIn .2s ease;"></div><div style="position:absolute;left:0;right:0;bottom:0;background:var(--paper);border-top:1px solid var(--line);border-radius:24px 24px 0 0;padding:24px 20px 28px 20px;display:flex;flex-direction:column;gap:14px;animation:sheetUp .28s cubic-bezier(0.22,1,0.36,1);"><div style="width:36px;height:4px;border-radius:2px;background:var(--track);align-self:center;"></div>${inner}</div>`;
+}
+function sheetCooling(){ return sheetShell(`<div style="font:700 20px 'Space Grotesk',sans-serif;">Un limite più largo?</div><div style="display:flex;align-items:baseline;gap:10px;"><span style="font:600 22px 'JetBrains Mono',monospace;color:var(--muted);text-decoration:line-through;text-decoration-thickness:1.5px;">60&nbsp;€</span><span style="font:400 14px 'Space Grotesk',sans-serif;color:var(--muted);">→</span><span style="font:700 26px 'JetBrains Mono',monospace;">80&nbsp;€</span><span style="font:400 12px 'Space Grotesk',sans-serif;color:var(--muted);">importo massimo per ordine</span></div><div style="font:400 14px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.55;">Niente cambia adesso. La richiesta matura in 72 ore, poi ti verrà chiesta una seconda conferma, a mente fredda. Fino ad allora il motore lavora con 60&nbsp;€.</div><div style="display:flex;flex-direction:column;gap:10px;padding-top:4px;"><button data-action="confermaCooling" style="padding:15px;border:none;background:var(--inksurf);color:#F5F2EC;border-radius:12px;font:600 15px 'Space Grotesk',sans-serif;cursor:pointer;">Avvia le 72 ore</button><button data-action="chiudiSheet" style="padding:15px;border:1px solid var(--line);background:transparent;color:var(--fg);border-radius:12px;font:600 15px 'Space Grotesk',sans-serif;cursor:pointer;">Annulla</button></div>`); }
+function sheetQuarantena(){ return sheetShell(`<div style="font:700 20px 'Space Grotesk',sans-serif;">Metti in prova la v4</div><div style="display:flex;justify-content:space-between;align-items:baseline;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 16px;"><span style="font:400 13px 'Space Grotesk',sans-serif;color:var(--muted);">Importo per run</span><span style="font:500 14px 'JetBrains Mono',monospace;"><span style="color:var(--muted);text-decoration:line-through;">100&nbsp;€</span> → <strong style="font-weight:700;">150&nbsp;€</strong></span></div><div style="font:400 14px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.55;">La modifica gira 7 giorni in dry-run: ogni giorno vedi cosa avrebbe fatto, senza ordini reali. La v3 resta operativa. Solo alla fine, se confermi, la v4 prende il mare.</div><div style="display:flex;flex-direction:column;gap:10px;padding-top:4px;"><button data-action="confermaQuarantena" style="padding:15px;border:none;background:var(--inksurf);color:#F5F2EC;border-radius:12px;font:600 15px 'Space Grotesk',sans-serif;cursor:pointer;">Avvia la quarantena</button><button data-action="chiudiSheet" style="padding:15px;border:1px solid var(--line);background:transparent;color:var(--fg);border-radius:12px;font:600 15px 'Space Grotesk',sans-serif;cursor:pointer;">Annulla</button></div>`); }
+function sheetRialza(){
+  const s=state;
+  const pronto = s.checkDoctor && s.checkCapito && s.notaRialzo.trim().length>0;
+  const btn=`padding:15px;border:none;border-radius:12px;background:${pronto?'var(--inksurf)':'var(--track)'};color:${pronto?'#F5F2EC':'var(--muted)'};font:600 15px 'Space Grotesk',sans-serif;cursor:${pronto?'pointer':'default'};transition:background .2s ease;`;
+  return sheetShell(`<div style="font:700 20px 'Space Grotesk',sans-serif;">Rialza l'àncora</div><div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 16px;display:flex;flex-direction:column;"><div data-action="toggleCheckDoctor" style="display:flex;gap:12px;align-items:center;padding:13px 0;border-bottom:1px solid var(--line);cursor:pointer;"><span style="${checkbox(s.checkDoctor)}">${CHECKMARK}</span><span style="font:400 13px 'Space Grotesk',sans-serif;line-height:1.45;">Ho eseguito il check di Diagnostica: 7 su 7</span></div><div data-action="toggleCheckCapito" style="display:flex;gap:12px;align-items:center;padding:13px 0;cursor:pointer;"><span style="${checkbox(s.checkCapito)}">${CHECKMARK}</span><span style="font:400 13px 'Space Grotesk',sans-serif;line-height:1.45;">Ho capito perché l'àncora è calata</span></div></div><div style="display:flex;flex-direction:column;gap:6px;"><div style="font:600 11px 'Space Grotesk',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);">Nota per il Giornale (obbligatoria)</div><textarea data-action="setNotaRialzo" id="in-notarialzo" placeholder="Cosa hai verificato? La nota finisce nel run di rialzo, sigillata come tutto il resto." rows="3" style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 14px;font:400 13px 'Space Grotesk',sans-serif;line-height:1.5;color:var(--fg);resize:none;width:100%;">${esc(s.notaRialzo)}</textarea></div><button data-action="confermaRialzo" style="${btn}">Rialza l'àncora</button><div style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);text-align:center;line-height:1.5;">Il motore riparte dal prossimo run in orario:<br>domani alle 16:00, non subito.</div>`);
+}
+
+/* ---------------- render ---------------- */
+function render(){
+  const s = state;
+  const d = derive();
+  document.getElementById('root').setAttribute('data-tema', props.temaNotte?'notte':'giorno');
+
+  // Gate d'accesso: senza utente autenticato si vede solo il login.
+  if(AUTH && !USER){
+    const frame0 = document.getElementById('frame');
+    frame0.setAttribute('style', `width:100%;max-width:480px;height:100dvh;background:var(--paper);background-image:repeating-linear-gradient(0deg, var(--gridline) 0, var(--gridline) 1px, transparent 1px, transparent 56px),repeating-linear-gradient(90deg, var(--gridline) 0, var(--gridline) 1px, transparent 1px, transparent 56px);border-left:1px solid var(--line);border-right:1px solid var(--line);overflow:hidden;position:relative;display:flex;flex-direction:column;`);
+    const act0 = document.activeElement;
+    const fid0 = act0 && act0.id && act0.id.startsWith('in-') ? act0.id : null;
+    const s0 = fid0?act0.selectionStart:null, e0 = fid0?act0.selectionEnd:null;
+    frame0.innerHTML = loginScreen();
+    if(fid0){ const el=document.getElementById(fid0); if(el){ el.focus(); try{el.setSelectionRange(s0,e0);}catch(e){} } }
+    return;
+  }
+
+  let html = '';
+  if(d.fase==='varo') html = varoScreen();
+  else if(d.fase==='varata') html = varataScreen();
+  else html = appScreen(d);
+
+  if(d.fase==='app' && s.menu) html += menuOverlay(d);
+  if(d.fase==='app' && s.avvisiOpen) html += avvisiOverlay(d);
+  if(s.sheet==='cooling') html += sheetCooling();
+  else if(s.sheet==='quarantena') html += sheetQuarantena();
+  else if(s.sheet==='rialza') html += sheetRialza();
+  if(s.toast!==null) html += `<div style="position:absolute;bottom:76px;left:50%;transform:translateX(-50%);background:var(--inksurf);color:#F5F2EC;border-radius:12px;padding:12px 18px;font:500 13px 'Space Grotesk',sans-serif;max-width:350px;text-align:center;animation:toastIn .25s ease;box-shadow:0 6px 20px rgba(27,38,59,0.3);">${esc(s.toast)}</div>`;
+
+  const frame = document.getElementById('frame');
+  frame.setAttribute('style', `width:100%;max-width:${d.isDesktop?'960px':'480px'};height:100dvh;background:var(--paper);background-image:repeating-linear-gradient(0deg, var(--gridline) 0, var(--gridline) 1px, transparent 1px, transparent 56px),repeating-linear-gradient(90deg, var(--gridline) 0, var(--gridline) 1px, transparent 1px, transparent 56px);border-left:1px solid var(--line);border-right:1px solid var(--line);overflow:hidden;position:relative;display:flex;flex-direction:column;transition:max-width .3s ease;`);
+
+  const active = document.activeElement;
+  const fid = active && active.id && active.id.startsWith('in-') ? active.id : null;
+  const ss = fid?active.selectionStart:null, se = fid?active.selectionEnd:null;
+  frame.innerHTML = html;
+  if(fid){ const el=document.getElementById(fid); if(el){ el.focus(); try{el.setSelectionRange(ss,se);}catch(e){} } }
+  syncControls();
+  saveUI();
+}
+
+/* ---------------- actions ---------------- */
+const go = tab => () => setState({tab, menu:false, avvisiOpen:false});
+const actions = {
+  authEntra(){
+    if(!AUTH || state.authBusy) return;
+    setState({authBusy:true, authErr:null});
+    AUTH.signInWithEmailAndPassword((state.lmail||'').trim(), state.lpass||'')
+      .catch(e=>setState({authBusy:false, authErr:'Accesso non riuscito: controlla email e password.'}));
+  },
+  authCrea(){
+    if(!AUTH || state.authBusy) return;
+    if(!(state.lpass||'').length || (state.lpass||'').length<8){ setState({authErr:'Per creare l’account serve una password di almeno 8 caratteri.'}); return; }
+    setState({authBusy:true, authErr:null});
+    AUTH.createUserWithEmailAndPassword((state.lmail||'').trim(), state.lpass)
+      .catch(e=>setState({authBusy:false, authErr:(e&&e.code==='auth/email-already-in-use')?'Questa email ha già un account: usa Entra.':'Creazione non riuscita: controlla l’email e riprova.'}));
+  },
+  authEsci(){ if(AUTH) AUTH.signOut(); setState({menu:false, lpass:''}); },
+  varoAvanti1(){ if(state.chiaveApi.trim().length>=4 && state.chiaveSegreta.trim().length>=4) setState({varoStep:2}); },
+  varoAvanti2(){ if(varoValidation().ok) setState({varoStep:3, varoActiveT:null}); },
+  varoAvanti3(){ if(varoLimitiVal().ok) setState({varoStep:4}); },
+  pickSym(idx, _tab, el){
+    const i = +idx, sym = el && el.getAttribute('data-sym');
+    if(sym && state.varoTargets[i]){ state.varoTargets[i].t = sym; state.varoActiveT = null; render(); }
+  },
+  addTarget(){ state.varoTargets.push({t:'',p:''}); render(); },
+  rmTarget(idx){ state.varoTargets.splice(+idx,1); render(); },
+  scaricaRotta(){
+    const V = varoValidation();
+    if(!V.ok){ showToast(V.msg); return; }
+    const blob = new Blob([rottaYamlText(V)], {type:'text/yaml'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'rotta.yaml'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+    showToast('rotta.yaml scaricato — mettilo in ~/timone e usa `timone rotta --proponi` per le modifiche');
+  },
+  varoIndietro(){ if(state.varoStep>1 && !state.varando) setState({varoStep:state.varoStep-1}); },
+  vara(){ if(state.varando) return; setState({varando:true}); T.varo=setTimeout(()=>{ anim.value=true; anim.seal=true; setState({varando:false,fase:'varata',override:true,postVaro:true}); },1100); },
+  entraConsole(){ anim.header=true; anim.value=true; anim.seal=true; setState({fase:'app',override:true,tab:'bussola'}); },
+  goBussola: go('bussola'), goGiornale: go('giornale'), goRotta: go('rotta'), goSicurezza: go('sicurezza'), goFiscale: go('fiscale'), goDiagnostica: go('diagnostica'),
+  toggleRun(id){ setState({expandedRun: state.expandedRun===id?null:id}); },
+  toggleVer(id){ setState({expandedVer: state.expandedVer===id?null:id}); },
+  verificaCatena(){ if(state.verRunning) return; const d=derive(); const n=d.primoGiorno?1:47; clearInterval(T.ver); setState({verRunning:true,verN:0,verDone:false}); T.ver=setInterval(()=>{ setState(st=>{ if(st.verN>=n){ clearInterval(T.ver); showToast('Catena integra — '+n+(n===1?' sigillo':' sigilli')+', nessuna discrepanza'); return {verRunning:false,verDone:true}; } return {verN:st.verN+1}; }); }, d.primoGiorno?500:45); },
+  esportaRapporto(){ showToast('Rapporto esportato — indica il primo run che non corrisponde'); },
+  apriQuarantena(){ setState({sheet:'quarantena'}); },
+  confermaQuarantena(){ setState({quarantena:true,sheet:null}); showToast('Quarantena avviata — 7 giorni di dry-run, la rotta attuale resta operativa'); },
+  annullaQuarantena(){ setState({quarantena:false}); showToast('Quarantena annullata — la v4 non prenderà il mare'); },
+  toggleGuardrail(){ setState({guardrailOpen:!state.guardrailOpen}); },
+  toggleAncora(){ setState({ancoraOpen:!state.ancoraOpen}); },
+  apriCooling(){ setState({sheet:'cooling'}); },
+  confermaCooling(){ setState({cooling:true,sheet:null}); showToast('Richiesta avviata — seconda conferma fra 72 ore'); },
+  annullaCooling(){ const d=derive(); if(d.secondaConferma) setState({coolingEsito:'no'}); else setState({cooling:false}); showToast('Richiesta annullata — resta il limite di 60 €'); },
+  confermaSeconda(){ setState({coolingEsito:'ok'}); showToast('Limite aggiornato — 80 € per ordine dal prossimo run'); },
+  apriRialza(){ setState({sheet:'rialza',checkDoctor:false,checkCapito:false,notaRialzo:''}); },
+  toggleCheckDoctor(){ setState({checkDoctor:!state.checkDoctor}); },
+  toggleCheckCapito(){ setState({checkCapito:!state.checkCapito}); },
+  confermaRialzo(){ if(!(state.checkDoctor&&state.checkCapito&&state.notaRialzo.trim().length>0)) return; setState({ancoraRialzata:true,sheet:null}); showToast('Àncora rialzata — il motore riparte domani alle 16:00'); },
+  chiudiSheet(){ setState({sheet:null}); },
+  esportaFiscale(){ showToast('Report esportato — CSV e PDF, cambi stimati marcati riga per riga'); },
+  apriAvvisi(){ setState({avvisiOpen:true,menu:false}); },
+  chiudiAvvisi(){ setState({avvisiOpen:false}); },
+  avvisoOpen(id, tab){ setState({avvisiOpen:false, tab}); },
+  apriMenu(){ setState({menu:true,avvisiOpen:false}); },
+  chiudiMenu(){ setState({menu:false}); },
+  eseguiDoctor(){ if(state.doctorRunning) return; clearInterval(T.doc); setState({doctorRunning:true,doctorN:0}); T.doc=setInterval(()=>{ setState(st=>{ if(st.doctorN>=7){ clearInterval(T.doc); showToast('Tutto in bolla — 7 controlli su 7, un’attenzione minore'); return {doctorRunning:false}; } return {doctorN:st.doctorN+1}; }); },380); },
+};
+const inputActions = {
+  setChiaveApi(v){ state.chiaveApi=v; render(); },
+  setChiaveSegreta(v){ state.chiaveSegreta=v; render(); },
+  setNotaVaro(v){ state.notaVaro=v; render(); },
+  setNotaRialzo(v){ state.notaRialzo=v; render(); },
+  setVaroT(v, el){ const i=+el.getAttribute('data-idx'); state.varoTargets[i].t=v; state.varoActiveT=i; render(); },
+  setVaroP(v, el){ state.varoTargets[+el.getAttribute('data-idx')].p=v; render(); },
+  setVaroImporto(v){ state.varoImporto=v; render(); },
+  setVaroSoglia(v){ state.varoSoglia=v; render(); },
+  setVaroLim(v, el){ state.varoLimiti[el.getAttribute('data-idx')]=v; render(); },
+  setLMail(v){ state.lmail=v; },
+  setLPass(v){ state.lpass=v; },
+};
+const frameEl = document.getElementById('frame');
+frameEl.addEventListener('click', e=>{ const el=e.target.closest('[data-action]'); if(!el) return; const a=el.getAttribute('data-action'); if(inputActions[a]) return; if(actions[a]){ e.preventDefault(); actions[a](el.getAttribute('data-idx')!==null && !el.getAttribute('data-id') && !el.getAttribute('data-tab') ? el.getAttribute('data-idx') : el.getAttribute('data-id'), el.getAttribute('data-tab'), el); } });
+frameEl.addEventListener('input', e=>{ const el=e.target.closest('[data-action]'); if(!el) return; const a=el.getAttribute('data-action'); if(inputActions[a]) inputActions[a](e.target.value, el); });
+
+/* ---------------- preview controls ---------------- */
+function syncControls(){
+  const varo=document.querySelector('[data-ctl="varo"]'); if(varo) varo.setAttribute('aria-pressed', String(props.mostraVaro));
+  document.querySelectorAll('[data-ctl="scenario"]').forEach(el=>el.setAttribute('aria-pressed', String(el.getAttribute('data-val')===props.scenario)));
+  document.querySelectorAll('[data-ctl="tema"]').forEach(el=>el.setAttribute('aria-pressed', String((el.getAttribute('data-val')==='notte')===props.temaNotte)));
+}
+document.getElementById('ctl-toggle').addEventListener('click', ()=>{ const p=document.getElementById('ctl-panel'); p.style.display = p.style.display==='none'?'flex':'none'; });
+document.getElementById('ctl-panel').addEventListener('click', e=>{
+  const el=e.target.closest('[data-ctl]'); if(!el) return; const c=el.getAttribute('data-ctl');
+  if(c==='varo'){ props.mostraVaro=!props.mostraVaro; render(); }
+  else if(c==='scenario'){ props.scenario=el.getAttribute('data-val'); render(); }
+  else if(c==='tema'){ props.temaNotte = el.getAttribute('data-val')==='notte'; render(); }
+  else if(c==='reset'){ try{localStorage.removeItem('timone-ui-v1');}catch(e){} Object.values(T).forEach(t=>{clearTimeout(t);clearInterval(t);}); state=initialState(); props.mostraVaro=true; anim={header:true,value:true,seal:true,ancora:true}; render(); }
+});
+
+/* ---------------- desktop media query ---------------- */
+const mq = window.matchMedia('(min-width: 960px)');
+const onMq = ()=>setState({desktop:mq.matches});
+mq.addEventListener('change', onMq);
+state.desktop = mq.matches;
+loadUI();
+
+/* ---------------- PWA manifest ---------------- */
+try {
+  const icon = "data:image/svg+xml," + encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='#1B263B'/>${compass(100,false,'#F5F2EC').replace(/^<svg[^>]*>|<\/svg>$/g,'')}</svg>`);
+  const mf = { name:'Timone', short_name:'Timone', start_url:'.', display:'standalone', background_color:'#E7E2D4', theme_color:'#1B263B', icons:[{src:icon, sizes:'any', type:'image/svg+xml'}] };
+  const link=document.createElement('link'); link.rel='manifest'; link.href=URL.createObjectURL(new Blob([JSON.stringify(mf)],{type:'application/manifest+json'})); document.head.appendChild(link);
+} catch(e){}
+
+render();
+</script>
+</body>
+</html>

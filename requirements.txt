@@ -1,0 +1,9 @@
+# Timone — dipendenze runtime (Python 3.11+)
+# Installazione:  pip install -r requirements.txt
+alpaca-py==0.43.5
+PyYAML==6.0.3
+python-dotenv==1.2.2
+
+# Sviluppo / test (opzionale):
+#   pip install pytest
+# pytest==9.1.1

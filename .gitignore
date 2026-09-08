@@ -1,0 +1,61 @@
+# ══════════════════════════════════════════════════════════════════
+#  Chiavi e segreti — MAI nel repository
+# ══════════════════════════════════════════════════════════════════
+.env
+*.key
+*.pem
+*.p12
+credentials*.json
+service-account*.json
+
+# ══════════════════════════════════════════════════════════════════
+#  Dati generati dal sistema (posizioni, operazioni, stato, log)
+#  La cartella resta nel repo tramite data/.gitkeep, i contenuti no.
+# ══════════════════════════════════════════════════════════════════
+data/*
+!data/.gitkeep
+*.log
+
+# Configurazione REALE della strategia (dato personale).
+# Nel repo resta solo il modello: rotta.example.yaml
+rotta.yaml
+
+# ══════════════════════════════════════════════════════════════════
+#  Python
+# ══════════════════════════════════════════════════════════════════
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+
+# ══════════════════════════════════════════════════════════════════
+#  Deploy / hosting (artefatti locali, non codice sorgente)
+# ══════════════════════════════════════════════════════════════════
+hosting/
+.firebase/
+
+# ══════════════════════════════════════════════════════════════════
+#  Materiale di lavoro interno — NON destinato al repo pubblico
+#  (resta sul disco per continuare a sviluppare Timone)
+# ══════════════════════════════════════════════════════════════════
+HANDOFF.md
+TIMONE_PROMPT_FASE1.md
+TIMONE_BRAND_IDENTITY_PROMPT.md
+DESIGN_BUSSOLA_PROMPT.md
+DESIGN_FEATURES_PROMPT.md
+DESIGN_RIFINITURE_PROMPT.md
+bussola_handoff/
+*.zip
+app/v1.html
+
+# ══════════════════════════════════════════════════════════════════
+#  OS / editor
+# ══════════════════════════════════════════════════════════════════
+.DS_Store
+.idea/
+.vscode/

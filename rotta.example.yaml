@@ -1,0 +1,28 @@
+# Timone — Rotta (configurazione della strategia)
+#
+# La Rotta è la TUA strategia: quali strumenti, con quali pesi, quanto investire.
+# Timone NON suggerisce ticker né pesi. I valori qui sotto sono PLACEHOLDER
+# evidenti: sostituiscili con le tue scelte prima di operare.
+#
+# Copia questo file in `rotta.yaml` e compilalo.
+
+# Importo da investire ad ogni run schedulato, in EUR.
+# Con capitale piccolo, tienilo basso (es. 100-200 EUR).
+amount_per_run_eur: 100.0
+
+# Soglia di ribilanciamento, in PUNTI PERCENTUALI.
+# Se il peso effettivo di un asset devia dal target oltre questa soglia,
+# Timone genera ordini per riportarlo verso il target.
+# Esempio: target 40%, soglia 5 -> ribilancia se esce da [35%, 45%].
+rebalance_threshold_pct: 5.0
+
+# Strumenti e pesi target. La somma dei pesi DEVE fare 100.
+# I simboli devono essere ticker Alpaca validi (azioni/ETF USA).
+# Questi sono placeholder: NON sono un consiglio d'investimento.
+targets:
+  - ticker: TICKER_1
+    weight_pct: 40.0
+  - ticker: TICKER_2
+    weight_pct: 35.0
+  - ticker: TICKER_3
+    weight_pct: 25.0
