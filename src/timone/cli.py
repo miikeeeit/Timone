@@ -131,6 +131,25 @@ def cmd_verifica(settings, args) -> int:
     return 0 if ok else 1
 
 
+def cmd_doctor(settings, args) -> int:
+    """Controlli di salute del sistema (endpoint, chiavi, cambio, scheduler,
+    dati, catena, Àncora). Diagnostica di sola lettura."""
+    from .doctor import ERR, run_checks, summarize
+
+    checks = run_checks(settings)
+    s = summarize(checks)
+    testa = {
+        "ok": "Tutto in bolla",
+        "attenzione": "Un'attenzione minore",
+        "errore": "Un controllo è fallito",
+    }[s["stato"]]
+    simbolo = {"ok": "✓", "attenzione": "!", "errore": "✗"}
+    print(f"== Timone — diagnostica ==  {testa} · {s['ok']}/{s['totale']} ok")
+    for c in checks:
+        print(f"  [{simbolo[c.esito]}] {c.nome}: {c.dettaglio}")
+    return 1 if s["stato"] == ERR else 0
+
+
 def cmd_heartbeat(settings, args) -> int:
     """Controlla che il run di oggi sia avvenuto (da schedulare dopo le 16:00)."""
     from datetime import datetime
@@ -475,6 +494,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("dry-run", help="calcola e mostra gli ordini senza inviarli")
     sub.add_parser("status", help="posizioni, ultimo run, stato Àncora")
     sub.add_parser("verifica", help="riverifica la catena hash del Giornale")
+    sub.add_parser("doctor", help="controlli di salute del sistema (diagnostica)")
     sub.add_parser("heartbeat", help="controlla che il run di oggi sia avvenuto")
     sub.add_parser("fiscale", help="riepilogo fiscale annuale + simulatore")
     sub.add_parser("export-ui", help="esporta i dati reali per la Bussola (ui.json)")
@@ -522,6 +542,7 @@ _DISPATCH = {
     "status": cmd_status,
     "ancora": cmd_ancora,
     "verifica": cmd_verifica,
+    "doctor": cmd_doctor,
     "heartbeat": cmd_heartbeat,
     "fiscale": cmd_fiscale,
     "export-ui": cmd_export_ui,

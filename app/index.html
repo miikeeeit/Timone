@@ -674,10 +674,15 @@ function sicurezzaTab(d){
   const autoRow=(k,v,b)=>`<div style="display:flex;justify-content:space-between;align-items:baseline;padding:11px 0;${b?'border-bottom:1px solid rgba(245,242,236,0.08);':''}"><span style="font:400 12px 'Space Grotesk',sans-serif;color:#C7CDD8;">${k}</span><span style="font:600 12px 'JetBrains Mono',monospace;color:#F5F2EC;">${v}</span></div>`;
   const ancora = `<div style="background:var(--inksurf);border-radius:14px;overflow:hidden;"><div data-action="toggleAncora" style="display:flex;justify-content:space-between;align-items:center;padding:15px 16px;cursor:pointer;"><div style="display:flex;align-items:center;gap:10px;"><svg width="22" height="22" viewBox="0 0 48 48" fill="none"><path d="M24 10 L24 38 M16 32 C16 38 32 38 32 32 M17 17 L31 17" stroke="#F5F2EC" stroke-width="2.5" stroke-linecap="round"></path><circle cx="24" cy="12" r="4" stroke="#F5F2EC" stroke-width="2.5"></circle></svg><div style="display:flex;flex-direction:column;gap:1px;"><span style="font:600 14px 'Space Grotesk',sans-serif;color:#F5F2EC;">Àncora automatica</span><span style="font:400 11px 'Space Grotesk',sans-serif;color:#8B94A6;">${ancoraAutoSotto}</span></div></div><span style="font:600 12px 'Space Grotesk',sans-serif;color:#8B94A6;">${s.ancoraOpen?'chiudi ↑':'↓'}</span></div>${s.ancoraOpen?`<div style="padding:0 16px 14px 16px;display:flex;flex-direction:column;gap:12px;animation:rowIn .25s ease both;"><div style="display:flex;flex-direction:column;border-top:1px solid rgba(245,242,236,0.14);">${autoRow('Drawdown oltre soglia','−15&nbsp;%',1)}${autoRow('Dati broker incoerenti','subito',1)}${autoRow('Cambio stimato prolungato','5&nbsp;giorni',1)}${autoRow('Run falliti consecutivi','2',0)}</div><div style="font:400 11px 'Space Grotesk',sans-serif;color:#8B94A6;line-height:1.5;">Non si disattiva. Se scatta, la console mostra sempre quale regola e perché. Rialzarla è una decisione tua.</div></div>`:''}</div>`;
 
-  const hbTit = d.hbMancato?'Battito mancato':(d.primoGiorno?'In attesa del primo battito':'Battito regolare');
-  const hbSot = d.hbMancato?'run delle 16:00 non partito · se il silenzio continua, l’àncora cala da sola fra 2 h':(d.primoGiorno?'primo run atteso domani alle 16:00':'ultimo run oggi 16:00 · atteso il prossimo alle 16:00');
-  const hbStroke = d.hbMancato?'var(--brassText)':'var(--ok)';
-  const hbCard = `background:var(--card);border:${d.hbMancato?'1.5px solid #A98343':'1px solid var(--line)'};border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;`;
+  const B = (LIVE && LIVE.battito && LIVE.battito.ultimo && d.scenario==='normale') ? LIVE.battito : null;
+  const hbRitardo = !!B && B.stato==='in_ritardo';
+  const hbTit = d.hbMancato?'Battito mancato':(d.primoGiorno?'In attesa del primo battito':(hbRitardo?'Battito in ritardo':'Battito regolare'));
+  const hbSot = d.hbMancato?'run delle 16:00 non partito · se il silenzio continua, l’àncora cala da sola fra 2 h'
+    :(d.primoGiorno?'primo run atteso domani alle 16:00'
+      :(B?(hbRitardo?`ultimo run ${esc(B.ultimo)} · atteso ${esc(B.atteso)}`:`ultimo run ${esc(B.ultimo)} · prossimo ${esc(B.atteso)}`)
+        :'ultimo run oggi 16:00 · atteso il prossimo alle 16:00'));
+  const hbStroke = (d.hbMancato||hbRitardo)?'var(--brassText)':'var(--ok)';
+  const hbCard = `background:var(--card);border:${(d.hbMancato||hbRitardo)?'1.5px solid #A98343':'1px solid var(--line)'};border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;`;
   const heartbeat = `<div style="${hbCard}"><svg width="30" height="16" viewBox="0 0 60 24" fill="none"><path d="M2 12 L18 12 L23 4 L30 20 L35 12 L58 12" style="stroke:${hbStroke};" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><div style="display:flex;flex-direction:column;gap:1px;flex:1;"><span style="font:500 13px 'Space Grotesk',sans-serif;">${hbTit}</span><span style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);">${hbSot}</span></div></div>`;
 
   return `<div style="display:flex;flex-direction:column;height:100%;"><div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px 4px 20px;flex-shrink:0;"><div style="font:700 18px 'Space Grotesk',sans-serif;">Sicurezza</div><span style="${badgeStyle}">${badge}</span></div><div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding:12px 20px 24px 20px;">${perche}${guardrail}${cooling}${ancora}${heartbeat}</div></div>`;
@@ -703,19 +708,31 @@ function fiscaleTab(d){
 /* ---------------- DIAGNOSTICA ---------------- */
 function diagnosticaTab(d){
   const s = state;
-  const bolla = s.doctorRunning?'#A98343':'#1E7F4F';
-  const titolo = s.doctorRunning?'Check in corso…':'Tutto in bolla';
-  const sotto = s.doctorRunning?(s.doctorN+' controlli su 7'):"7 controlli su 7 · un'attenzione minore";
-  const meta = s.doctorRunning?'timone doctor · in esecuzione':'ultimo check oggi 14:30 · durata 1,8 s';
-  const rows = checkData.map((c,i)=>{
-    const done = i<s.doctorN;
-    const det = i===6 ? (done?(d.primoGiorno?'catena verificata · 1 sigillo':'catena verificata · 47 run'):'in verifica…') : (done?c.dettaglio:'in verifica…');
-    const dcol = done?(c.ok?'var(--ok)':'var(--brassText)'):'var(--line)';
-    const rowStyle=`display:flex;justify-content:space-between;align-items:center;padding:12px 0;gap:12px;${i<checkData.length-1?'border-bottom:1px solid var(--line);':''}opacity:${done?1:0.55};transition:opacity .25s ease;`;
-    return `<div style="${rowStyle}"><div style="display:flex;flex-direction:column;gap:1px;"><span style="font:500 13px 'Space Grotesk',sans-serif;">${c.nome}</span><span style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);">${det}</span></div><span style="${dot(dcol)}"></span></div>`;
-  }).join('');
+  const DOC = (LIVE && LIVE.doctor && Array.isArray(LIVE.doctor.controlli) && d.scenario==='normale') ? LIVE.doctor : null;
+  const bolla = DOC ? (DOC.stato==='ok'?'#1E7F4F':'#A98343') : (s.doctorRunning?'#A98343':'#1E7F4F');
+  const titolo = DOC ? ({ok:'Tutto in bolla',attenzione:"Un'attenzione minore",errore:'Un controllo è fallito'}[DOC.stato]||'Diagnostica')
+    : (s.doctorRunning?'Check in corso…':'Tutto in bolla');
+  const sotto = DOC ? `${DOC.ok} controlli su ${DOC.totale} ok`
+    : (s.doctorRunning?(s.doctorN+' controlli su 7'):"7 controlli su 7 · un'attenzione minore");
+  const meta = DOC ? `aggiornato alle ${esc(DOC.generato||'')} · a ogni run`
+    : (s.doctorRunning?'timone doctor · in esecuzione':'ultimo check oggi 14:30 · durata 1,8 s');
+  const rows = DOC ? DOC.controlli.map((c,i)=>{
+      const dcol = c.ok?'var(--ok)':'var(--brassText)';
+      const rowStyle=`display:flex;justify-content:space-between;align-items:center;padding:12px 0;gap:12px;${i<DOC.controlli.length-1?'border-bottom:1px solid var(--line);':''}`;
+      return `<div style="${rowStyle}"><div style="display:flex;flex-direction:column;gap:1px;"><span style="font:500 13px 'Space Grotesk',sans-serif;">${esc(c.nome)}</span><span style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);">${esc(c.dettaglio)}</span></div><span style="${dot(dcol)}"></span></div>`;
+    }).join('')
+    : checkData.map((c,i)=>{
+      const done = i<s.doctorN;
+      const det = i===6 ? (done?(d.primoGiorno?'catena verificata · 1 sigillo':'catena verificata · 47 run'):'in verifica…') : (done?c.dettaglio:'in verifica…');
+      const dcol = done?(c.ok?'var(--ok)':'var(--brassText)'):'var(--line)';
+      const rowStyle=`display:flex;justify-content:space-between;align-items:center;padding:12px 0;gap:12px;${i<checkData.length-1?'border-bottom:1px solid var(--line);':''}opacity:${done?1:0.55};transition:opacity .25s ease;`;
+      return `<div style="${rowStyle}"><div style="display:flex;flex-direction:column;gap:1px;"><span style="font:500 13px 'Space Grotesk',sans-serif;">${c.nome}</span><span style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);">${det}</span></div><span style="${dot(dcol)}"></span></div>`;
+    }).join('');
   const btnStyle=`padding:14px;border-radius:12px;border:1.5px solid ${s.doctorRunning?'var(--line)':'var(--action)'};background:transparent;color:${s.doctorRunning?'var(--muted)':'var(--action)'};font:600 14px 'Space Grotesk',sans-serif;cursor:${s.doctorRunning?'default':'pointer'};transition:color .2s ease;`;
-  return `<div style="display:flex;flex-direction:column;height:100%;"><div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px 4px 20px;flex-shrink:0;"><div style="display:flex;align-items:center;gap:10px;"><span data-action="goBussola" style="font:500 13px 'Space Grotesk',sans-serif;color:var(--muted);cursor:pointer;">←</span><div style="font:700 18px 'Space Grotesk',sans-serif;">Diagnostica</div></div><span style="font:500 12px 'JetBrains Mono',monospace;color:var(--muted);">timone doctor</span></div><div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding:12px 20px 24px 20px;"><div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;align-items:center;gap:16px;"><svg width="52" height="52" viewBox="0 0 60 60" fill="none"><rect x="4" y="24" width="52" height="12" rx="6" stroke="currentColor" stroke-width="2.5"></rect><line x1="26" y1="24" x2="26" y2="36" style="stroke:var(--line);" stroke-width="1.5"></line><line x1="34" y1="24" x2="34" y2="36" style="stroke:var(--line);" stroke-width="1.5"></line><circle cx="30" cy="30" r="4" fill="${bolla}"></circle></svg><div style="display:flex;flex-direction:column;gap:3px;"><div style="font:600 16px 'Space Grotesk',sans-serif;">${titolo}</div><div style="font:400 12px 'Space Grotesk',sans-serif;color:var(--muted);">${sotto}</div><div style="font:400 11px 'JetBrains Mono',monospace;color:var(--muted);">${meta}</div></div></div><div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 16px;display:flex;flex-direction:column;">${rows}</div><button data-action="eseguiDoctor" style="${btnStyle}">${s.doctorRunning?'Controlli in corso…':'Esegui di nuovo il check'}</button></div></div>`;
+  const footer = DOC
+    ? `<div style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.55;">La diagnostica si aggiorna a ogni run. Per eseguirla ora, dal terminale: <span style="font-family:'JetBrains Mono',monospace;color:var(--fg);">timone doctor</span>.</div>`
+    : `<button data-action="eseguiDoctor" style="${btnStyle}">${s.doctorRunning?'Controlli in corso…':'Esegui di nuovo il check'}</button>`;
+  return `<div style="display:flex;flex-direction:column;height:100%;"><div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px 4px 20px;flex-shrink:0;"><div style="display:flex;align-items:center;gap:10px;"><span data-action="goBussola" style="font:500 13px 'Space Grotesk',sans-serif;color:var(--muted);cursor:pointer;">←</span><div style="font:700 18px 'Space Grotesk',sans-serif;">Diagnostica</div></div><span style="font:500 12px 'JetBrains Mono',monospace;color:var(--muted);">timone doctor</span></div><div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding:12px 20px 24px 20px;"><div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;align-items:center;gap:16px;"><svg width="52" height="52" viewBox="0 0 60 60" fill="none"><rect x="4" y="24" width="52" height="12" rx="6" stroke="currentColor" stroke-width="2.5"></rect><line x1="26" y1="24" x2="26" y2="36" style="stroke:var(--line);" stroke-width="1.5"></line><line x1="34" y1="24" x2="34" y2="36" style="stroke:var(--line);" stroke-width="1.5"></line><circle cx="30" cy="30" r="4" fill="${bolla}"></circle></svg><div style="display:flex;flex-direction:column;gap:3px;"><div style="font:600 16px 'Space Grotesk',sans-serif;">${titolo}</div><div style="font:400 12px 'Space Grotesk',sans-serif;color:var(--muted);">${sotto}</div><div style="font:400 11px 'JetBrains Mono',monospace;color:var(--muted);">${meta}</div></div></div><div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 16px;display:flex;flex-direction:column;">${rows}</div>${footer}</div></div>`;
 }
 
 /* ---------------- APP shell ---------------- */

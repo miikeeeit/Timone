@@ -150,6 +150,70 @@ def _limiti_block(state) -> dict:
     }
 
 
+def _battito_block(state) -> dict:
+    """Stato del "battito": ultimo run reale, prossimo run atteso, e se il
+    motore è in ritardo rispetto all'ultimo giorno feriale in cui un run era
+    atteso. È un indicatore di sola lettura: il segnale autorevole di
+    battito mancato resta quello del motore (avvisi + auto-àncora).
+
+    Nota: usa i giorni feriali come proxy dei giorni di mercato; un festivo
+    infrasettimanale potrebbe segnare 'in_ritardo' pur senza un vero salto.
+    """
+    from datetime import datetime as _dt
+    from datetime import time as _time
+    from datetime import timedelta as _td
+    from zoneinfo import ZoneInfo
+
+    rome = ZoneInfo("Europe/Rome")
+    now = _dt.now(rome)
+    last = state.last_run
+
+    # Prossimo run atteso: primo giorno feriale alle 16:00 non ancora passato.
+    nxt = now.replace(hour=16, minute=0, second=0, microsecond=0)
+    if now >= nxt:
+        nxt = nxt + _td(days=1)
+    while nxt.weekday() >= 5:  # 5=sab, 6=dom
+        nxt = nxt + _td(days=1)
+    atteso = f"{_GIORNI[nxt.weekday()]} {nxt.day} {_MESI[nxt.month - 1]} · 16:00"
+
+    if not last:
+        return {"ultimo": None, "atteso": atteso, "stato": "assente"}
+
+    # Ultimo giorno feriale in cui un run era atteso: oggi se feriale e ormai
+    # passata la finestra delle 16:00, altrimenti il feriale precedente.
+    exp = now
+    if not (now.weekday() < 5 and now.time() >= _time(16, 0)):
+        exp = exp - _td(days=1)
+        while exp.weekday() >= 5:
+            exp = exp - _td(days=1)
+
+    stato = "regolare"
+    try:
+        last_day = _dt.strptime(last["run_id"], "%Y%m%d").date()
+        if last_day < exp.date():
+            stato = "in_ritardo"
+    except (ValueError, KeyError, TypeError):
+        pass
+
+    return {"ultimo": _label(last["run_id"], last.get("ts")), "atteso": atteso, "stato": stato}
+
+
+def _doctor_block(settings: Settings) -> dict:
+    """Esegue i controlli di `timone doctor` e li impacchetta per la Bussola."""
+    from .doctor import run_checks, summarize
+
+    checks = run_checks(settings)
+    return {
+        **summarize(checks),
+        "generato": datetime.now().strftime("%H:%M"),
+        "controlli": [
+            {"id": c.id, "nome": c.nome, "dettaglio": c.dettaglio,
+             "esito": c.esito, "ok": c.ok}
+            for c in checks
+        ],
+    }
+
+
 def build_ui_json(settings: Settings) -> Path:
     data_dir = Path(settings.data_dir)
     store = JsonStateStore(data_dir / "state.json")
@@ -236,6 +300,8 @@ def build_ui_json(settings: Settings) -> Path:
         "avvisi": state.avvisi,
         "rotta": _rotta_block(state),
         "limiti": _limiti_block(state),
+        "battito": _battito_block(state),
+        "doctor": _doctor_block(settings),
     }
 
     out = data_dir / "ui.json"
