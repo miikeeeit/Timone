@@ -39,6 +39,10 @@ dist/
 hosting/
 .firebase/
 
+# Script di schedulazione locale (launchd): contiene percorsi assoluti
+# della macchina, specifici di questa installazione. Resta sul disco.
+scripts/timone_scheduled.sh
+
 # ══════════════════════════════════════════════════════════════════
 #  Materiale di lavoro interno — NON destinato al repo pubblico
 #  (resta sul disco per continuare a sviluppare Timone)
