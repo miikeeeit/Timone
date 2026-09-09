@@ -32,6 +32,23 @@ Ad ogni esecuzione schedulata (una al giorno, nei giorni di mercato aperto):
 
 Tutto è ispezionabile da riga di comando (`timone status`, `verifica`, `fiscale`, `rotta`, `limiti`, `approdo`, …) e da un'interfaccia web di sola lettura.
 
+Un `dry-run` calcola gli ordini e li mostra **senza inviarli**. Dati d'esempio (fittizi):
+
+```text
+$ timone dry-run
+
+Giornale di bordo — run 20260305
+Ordini proposti: 2 (approvati 1, rifiutati 1).
+  APPROVATO BUY AGGH 70.00 EUR — DCA: versamento indirizzato al sottopeso (target 40.0%).
+  RIFIUTATO BUY VWCE 130.00 EUR — regola 'max_order_eur': Ordine da 130.00 EUR oltre il massimo di 120.00 EUR.
+Nessun ordine eseguito in questo run.
+Nota: [dry-run] Ora 16:05 dentro la finestra 15:30-22:00.
+
+(dry-run: nessun ordine è stato inviato.)
+```
+
+La riga **RIFIUTATO** è il punto: un ordine che sfora un limite non viene ridotto per rientrare — viene **scartato e registrato** con la regola violata. I guardrail vivono nel codice, non nella configurazione.
+
 ---
 
 ## Decisioni di progetto
