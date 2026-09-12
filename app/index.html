@@ -134,8 +134,10 @@ function loginScreen(){
         <div style="display:flex;flex-direction:column;gap:6px;padding:13px 0;"><span style="font:600 11px 'Space Grotesk',sans-serif;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);">Password</span><input data-action="setLPass" id="in-lpass" type="password" value="${esc(s.lpass||'')}" autocomplete="current-password" style="background:transparent;border:none;padding:0;font:500 14px 'JetBrains Mono',monospace;color:var(--fg);width:100%;"></div>
       </div>
       ${s.authErr?`<div style="font:400 12px 'Space Grotesk',sans-serif;color:var(--brassText);line-height:1.5;">${esc(s.authErr)}</div>`:''}
+      ${s.authInfo?`<div style="font:400 12px 'Space Grotesk',sans-serif;color:var(--ok);line-height:1.5;">${esc(s.authInfo)}</div>`:''}
       <button data-action="authEntra" style="padding:15px;border:none;background:${s.authBusy?'var(--track)':'var(--inksurf)'};color:${s.authBusy?'var(--muted)':'#F5F2EC'};border-radius:12px;font:600 15px 'Space Grotesk',sans-serif;cursor:pointer;">${s.authBusy?'Un momento…':'Entra'}</button>
       <div data-action="authCrea" style="font:500 13px 'Space Grotesk',sans-serif;color:var(--action);text-align:center;cursor:pointer;padding:4px;">Prima volta qui? Crea l'account</div>
+      <div data-action="authReset" style="font:500 12px 'Space Grotesk',sans-serif;color:var(--muted);text-align:center;cursor:pointer;padding:2px;">Password dimenticata?</div>
       <div style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);text-align:center;line-height:1.5;">Le chiavi Alpaca non entrano mai nel web:<br>vivono solo sul computer dove gira il motore.</div>
     </div>
     <div style="padding:0 24px 22px 24px;text-align:center;font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);">Timone v0.5 · paper trading</div>
@@ -889,16 +891,25 @@ const go = tab => () => setState({tab, menu:false, avvisiOpen:false});
 const actions = {
   authEntra(){
     if(!AUTH || state.authBusy) return;
-    setState({authBusy:true, authErr:null});
+    setState({authBusy:true, authErr:null, authInfo:null});
     AUTH.signInWithEmailAndPassword((state.lmail||'').trim(), state.lpass||'')
       .catch(e=>setState({authBusy:false, authErr:'Accesso non riuscito: controlla email e password.'}));
   },
   authCrea(){
     if(!AUTH || state.authBusy) return;
     if(!(state.lpass||'').length || (state.lpass||'').length<8){ setState({authErr:'Per creare l’account serve una password di almeno 8 caratteri.'}); return; }
-    setState({authBusy:true, authErr:null});
+    setState({authBusy:true, authErr:null, authInfo:null});
     AUTH.createUserWithEmailAndPassword((state.lmail||'').trim(), state.lpass)
       .catch(e=>setState({authBusy:false, authErr:(e&&e.code==='auth/email-already-in-use')?'Questa email ha già un account: usa Entra.':'Creazione non riuscita: controlla l’email e riprova.'}));
+  },
+  authReset(){
+    if(!AUTH || state.authBusy) return;
+    const mail = (state.lmail||'').trim();
+    if(!mail){ setState({authErr:'Scrivi prima la tua email, poi tocca “Password dimenticata?”.', authInfo:null}); return; }
+    setState({authBusy:true, authErr:null, authInfo:null});
+    AUTH.sendPasswordResetEmail(mail)
+      .then(()=>setState({authBusy:false, authInfo:'Ti ho inviato un’email per reimpostare la password: controlla la posta (anche lo spam).'}))
+      .catch(e=>setState({authBusy:false, authErr:'Invio non riuscito: controlla che l’email sia scritta bene.'}));
   },
   authEsci(){ if(AUTH) AUTH.signOut(); setState({menu:false, lpass:''}); },
   varoAvanti1(){ if(state.chiaveApi.trim().length>=4 && state.chiaveSegreta.trim().length>=4) setState({varoStep:2}); },
