@@ -8,5 +8,8 @@
         "headers": [{ "key": "Cache-Control", "value": "no-store" }]
       }
     ]
+  },
+  "firestore": {
+    "rules": "firestore.rules"
   }
 }

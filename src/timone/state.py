@@ -137,9 +137,13 @@ class StateStore(ABC):
     def is_anchor_down(self) -> bool:
         return self.read().anchor_down
 
-    def set_anchor(self, down: bool) -> None:
+    def set_anchor(self, down: bool, reason: str | None = None) -> None:
         state = self.read()
         state.anchor_down = down
+        if not down:
+            state.anchor_reason = None  # rialzare azzera il motivo
+        elif reason is not None:
+            state.anchor_reason = reason
         self.write(state)
 
 

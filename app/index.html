@@ -10,6 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
   html,body{margin:0;padding:0;background:var(--desk);}
   *{box-sizing:border-box;}
@@ -94,7 +95,7 @@ const BELL = col => `<svg width="20" height="20" viewBox="0 0 24 24" fill="none"
 
 const props = { mostraVaro: true, scenario: 'normale', temaNotte: false };
 /* ---- accesso: Firebase Auth (email+password). Le chiavi Alpaca NON entrano mai qui ---- */
-let AUTH = null, USER = undefined;
+let AUTH = null, USER = undefined, DB = null;
 try{
   firebase.initializeApp({
     apiKey: "AIzaSyAaNkOzoVu5sbGALnNjKNtAXpe9hl8x5Pc",
@@ -104,7 +105,25 @@ try{
   });
   AUTH = firebase.auth();
   AUTH.onAuthStateChanged(u => { USER = u; state.authBusy = false; render(); });
+  try{ DB = firebase.firestore(); }catch(e){ DB = null; }
 }catch(e){ AUTH = null; }
+
+/* ---- Àncora azionabile da mobile: la PWA scrive solo un INTENTO su Firestore.
+   Il motore lo legge a inizio run/heartbeat e lo applica. Mai un ordine. ---- */
+async function inviaComandoAncora(azione, motivo){
+  if(!DB){ showToast('Console non collegata: comando non inviato'); return false; }
+  try{
+    await DB.collection('timone').doc('ancora').set({
+      azione,
+      richiesto_il: new Date().toISOString(),
+      richiesto_da: (USER && USER.email) || 'console',
+      motivo: (motivo && motivo.trim()) || null,
+      applicato_il: null,
+      stato_motore: null,
+    }, {merge:true});
+    return true;
+  }catch(e){ showToast('Comando non inviato: ' + ((e && (e.code||e.message)) || 'errore')); return false; }
+}
 function loginScreen(){
   const s = state;
   return `<div style="display:flex;flex-direction:column;height:100%;animation:fadeIn .3s ease;">
@@ -158,7 +177,7 @@ const initialState = () => ({
   varoActiveT:null, varoLimiti:{ordine:'', giorno:'', nrun:''},
   tab:'bussola', menu:false, avvisiOpen:false, expandedRun:null, verRunning:false, verN:0, verDone:false,
   expandedVer:null, quarantena:false, cooling:false, sheet:null, checkDoctor:false, checkCapito:false, notaRialzo:'',
-  ancoraRialzata:false, doctorRunning:false, doctorN:7, guardrailOpen:false, ancoraOpen:false, toast:null,
+  ancoraRialzata:false, notaCala:'', ancoraComando:null, doctorRunning:false, doctorN:7, guardrailOpen:false, ancoraOpen:false, toast:null,
   desktop:false, coolingEsito:null,
 });
 let state = initialState();
@@ -547,7 +566,16 @@ function bussolaTab(d){
           <div style="display:flex;align-items:center;gap:8px;"><span style="width:7px;height:7px;border-radius:50%;background:${runRegime[0]&&runRegime[0].amber?'var(--brassText)':'var(--ok)'};flex-shrink:0;"></span><span style="font:500 14px 'Space Grotesk',sans-serif;">${runRegime[0]?runRegime[0].titolo:'Nessun run ancora'}</span></div>
           <span style="font:500 12px 'Space Grotesk',sans-serif;color:var(--action);">Giornale completo →</span>
         </div>
+      </div>
+      ${(LIVE && LIVE.narratore && Array.isArray(LIVE.narratore.paragrafi) && d.scenario==='normale') ? (function(N){
+        return `<div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="font:600 11px 'Space Grotesk',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);">${esc(N.titolo||'Diario della settimana')}</div>
+        <div style="background:var(--card);border:1px solid ${N.attenzione?'#A98343':'var(--line)'};border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;"><span style="font:500 12px 'JetBrains Mono',monospace;color:var(--muted);">${esc(N.periodo||'')}</span>${N.attenzione?`<span style="font:600 10px 'Space Grotesk',sans-serif;letter-spacing:0.08em;text-transform:uppercase;color:var(--brassText);border:1px solid var(--brassText);border-radius:5px;padding:2px 6px;">da leggere</span>`:''}</div>
+          ${N.paragrafi.map(p=>`<div style="font:400 13px 'Space Grotesk',sans-serif;color:var(--fg);line-height:1.62;">${esc(p)}</div>`).join('')}
+        </div>
       </div>`;
+      })(LIVE.narratore) : ''}`;
   } else {
     const sealAnim = anim.seal; anim.seal=false;
     body = `<div style="display:flex;flex-direction:column;gap:8px;">
@@ -685,7 +713,12 @@ function sicurezzaTab(d){
   const hbCard = `background:var(--card);border:${(d.hbMancato||hbRitardo)?'1.5px solid #A98343':'1px solid var(--line)'};border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;`;
   const heartbeat = `<div style="${hbCard}"><svg width="30" height="16" viewBox="0 0 60 24" fill="none"><path d="M2 12 L18 12 L23 4 L30 20 L35 12 L58 12" style="stroke:${hbStroke};" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><div style="display:flex;flex-direction:column;gap:1px;flex:1;"><span style="font:500 13px 'Space Grotesk',sans-serif;">${hbTit}</span><span style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);">${hbSot}</span></div></div>`;
 
-  return `<div style="display:flex;flex-direction:column;height:100%;"><div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px 4px 20px;flex-shrink:0;"><div style="font:700 18px 'Space Grotesk',sans-serif;">Sicurezza</div><span style="${badgeStyle}">${badge}</span></div><div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding:12px 20px 24px 20px;">${perche}${guardrail}${cooling}${ancora}${heartbeat}</div></div>`;
+  const ancoraManuale = d.ancoraGiu ? '' : (
+    s.ancoraComando==='cala'
+      ? `<div style="background:var(--card);border:1px solid var(--brassText);border-radius:14px;padding:14px 16px;font:400 12px 'Space Grotesk',sans-serif;color:var(--brassText);line-height:1.5;">Comando inviato: il motore calerà l'àncora al prossimo run. Le posizioni aperte non vengono toccate.</div>`
+      : `<button data-action="apriCala" style="padding:14px;border:1.5px solid var(--fg);background:transparent;color:var(--fg);border-radius:12px;font:600 14px 'Space Grotesk',sans-serif;cursor:pointer;">Cala l'àncora</button>`
+  );
+  return `<div style="display:flex;flex-direction:column;height:100%;"><div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px 4px 20px;flex-shrink:0;"><div style="font:700 18px 'Space Grotesk',sans-serif;">Sicurezza</div><span style="${badgeStyle}">${badge}</span></div><div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding:12px 20px 24px 20px;">${perche}${guardrail}${cooling}${ancora}${ancoraManuale}${heartbeat}</div></div>`;
 }
 
 /* ---------------- FISCALE ---------------- */
@@ -803,6 +836,10 @@ function sheetRialza(){
   const btn=`padding:15px;border:none;border-radius:12px;background:${pronto?'var(--inksurf)':'var(--track)'};color:${pronto?'#F5F2EC':'var(--muted)'};font:600 15px 'Space Grotesk',sans-serif;cursor:${pronto?'pointer':'default'};transition:background .2s ease;`;
   return sheetShell(`<div style="font:700 20px 'Space Grotesk',sans-serif;">Rialza l'àncora</div><div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 16px;display:flex;flex-direction:column;"><div data-action="toggleCheckDoctor" style="display:flex;gap:12px;align-items:center;padding:13px 0;border-bottom:1px solid var(--line);cursor:pointer;"><span style="${checkbox(s.checkDoctor)}">${CHECKMARK}</span><span style="font:400 13px 'Space Grotesk',sans-serif;line-height:1.45;">Ho eseguito il check di Diagnostica: 7 su 7</span></div><div data-action="toggleCheckCapito" style="display:flex;gap:12px;align-items:center;padding:13px 0;cursor:pointer;"><span style="${checkbox(s.checkCapito)}">${CHECKMARK}</span><span style="font:400 13px 'Space Grotesk',sans-serif;line-height:1.45;">Ho capito perché l'àncora è calata</span></div></div><div style="display:flex;flex-direction:column;gap:6px;"><div style="font:600 11px 'Space Grotesk',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);">Nota per il Giornale (obbligatoria)</div><textarea data-action="setNotaRialzo" id="in-notarialzo" placeholder="Cosa hai verificato? La nota finisce nel run di rialzo, sigillata come tutto il resto." rows="3" style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 14px;font:400 13px 'Space Grotesk',sans-serif;line-height:1.5;color:var(--fg);resize:none;width:100%;">${esc(s.notaRialzo)}</textarea></div><button data-action="confermaRialzo" style="${btn}">Rialza l'àncora</button><div style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);text-align:center;line-height:1.5;">Il motore riparte dal prossimo run in orario:<br>domani alle 16:00, non subito.</div>`);
 }
+function sheetCala(){
+  const s=state;
+  return sheetShell(`<div style="font:700 20px 'Space Grotesk',sans-serif;">Cala l'àncora</div><div style="font:400 13px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.55;">Ferma il motore: nessun ordine verrà inviato finché non la rialzi. Le posizioni già aperte non vengono toccate. Ha effetto dal prossimo run in orario, non subito.</div><div style="display:flex;flex-direction:column;gap:6px;"><div style="font:600 11px 'Space Grotesk',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);">Nota per il Giornale (facoltativa)</div><textarea data-action="setNotaCala" id="in-notacala" placeholder="Perché stai fermando il motore? La nota resta annotata." rows="3" style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 14px;font:400 13px 'Space Grotesk',sans-serif;line-height:1.5;color:var(--fg);resize:none;width:100%;">${esc(s.notaCala||'')}</textarea></div><button data-action="confermaCala" style="padding:15px;border:none;border-radius:12px;background:var(--inksurf);color:#F5F2EC;font:600 15px 'Space Grotesk',sans-serif;cursor:pointer;">Cala l'àncora ora</button>`);
+}
 
 /* ---------------- render ---------------- */
 function render(){
@@ -832,6 +869,7 @@ function render(){
   if(s.sheet==='cooling') html += sheetCooling();
   else if(s.sheet==='quarantena') html += sheetQuarantena();
   else if(s.sheet==='rialza') html += sheetRialza();
+  else if(s.sheet==='cala') html += sheetCala();
   if(s.toast!==null) html += `<div style="position:absolute;bottom:76px;left:50%;transform:translateX(-50%);background:var(--inksurf);color:#F5F2EC;border-radius:12px;padding:12px 18px;font:500 13px 'Space Grotesk',sans-serif;max-width:350px;text-align:center;animation:toastIn .25s ease;box-shadow:0 6px 20px rgba(27,38,59,0.3);">${esc(s.toast)}</div>`;
 
   const frame = document.getElementById('frame');
@@ -901,7 +939,9 @@ const actions = {
   apriRialza(){ setState({sheet:'rialza',checkDoctor:false,checkCapito:false,notaRialzo:''}); },
   toggleCheckDoctor(){ setState({checkDoctor:!state.checkDoctor}); },
   toggleCheckCapito(){ setState({checkCapito:!state.checkCapito}); },
-  confermaRialzo(){ if(!(state.checkDoctor&&state.checkCapito&&state.notaRialzo.trim().length>0)) return; setState({ancoraRialzata:true,sheet:null}); showToast('Àncora rialzata — il motore riparte domani alle 16:00'); },
+  confermaRialzo(){ if(!(state.checkDoctor&&state.checkCapito&&state.notaRialzo.trim().length>0)) return; const nota=state.notaRialzo.trim(); inviaComandoAncora('rialza', nota).then(ok=>{ if(ok){ setState({ancoraRialzata:true,sheet:null,ancoraComando:'rialza'}); showToast('Comando inviato — il motore rialza l’àncora al prossimo run'); } }); },
+  apriCala(){ setState({sheet:'cala',notaCala:''}); },
+  confermaCala(){ const nota=state.notaCala.trim(); inviaComandoAncora('cala', nota).then(ok=>{ if(ok){ setState({sheet:null,ancoraComando:'cala'}); showToast('Comando inviato — il motore cala l’àncora al prossimo run'); } }); },
   chiudiSheet(){ setState({sheet:null}); },
   esportaFiscale(){ showToast('Report esportato — CSV e PDF, cambi stimati marcati riga per riga'); },
   apriAvvisi(){ setState({avvisiOpen:true,menu:false}); },
@@ -916,6 +956,7 @@ const inputActions = {
   setChiaveSegreta(v){ state.chiaveSegreta=v; render(); },
   setNotaVaro(v){ state.notaVaro=v; render(); },
   setNotaRialzo(v){ state.notaRialzo=v; render(); },
+  setNotaCala(v){ state.notaCala=v; render(); },
   setVaroT(v, el){ const i=+el.getAttribute('data-idx'); state.varoTargets[i].t=v; state.varoActiveT=i; render(); },
   setVaroP(v, el){ state.varoTargets[+el.getAttribute('data-idx')].p=v; render(); },
   setVaroImporto(v){ state.varoImporto=v; render(); },

@@ -23,6 +23,19 @@ def _state_store(settings) -> JsonStateStore:
     return JsonStateStore(Path(settings.data_dir) / "state.json")
 
 
+def _sync_ancora_mobile(settings, store) -> None:
+    """Applica un eventuale comando dell'Àncora arrivato dalla PWA (Firestore).
+    Best-effort: un ponte spento o irraggiungibile non deve mai fermare il run."""
+    try:
+        from . import remote
+
+        esito = remote.sync_ancora(settings, store)
+        if esito:
+            print(f"Àncora {esito['stato']} da mobile (comando '{esito['azione']}').")
+    except Exception as exc:  # noqa: BLE001 - il ponte è un extra, mai bloccante
+        print(f"(ponte Àncora non disponibile: {exc})", file=sys.stderr)
+
+
 def _active_rotta(settings, store):
     """La Rotta operativa: la versione attiva nello stato; il file su disco
     serve solo per il varo (v1) e per proporre modifiche (quarantena)."""
@@ -57,6 +70,7 @@ def _build_engine(settings):
 
 def cmd_run(settings, args) -> int:
     store = _state_store(settings)
+    _sync_ancora_mobile(settings, store)  # applica comandi Àncora da mobile
     try:
         engine = _build_engine(settings)
         report = engine.run(dry_run=False)
@@ -150,6 +164,18 @@ def cmd_doctor(settings, args) -> int:
     return 1 if s["stato"] == ERR else 0
 
 
+def cmd_narratore(settings, args) -> int:
+    """Il diario settimanale in linguaggio naturale: racconta cosa ha fatto il
+    motore, senza mai suggerire cosa fare."""
+    from .narratore import weekly_report
+
+    r = weekly_report(settings)
+    print(f"== {r['titolo']} · {r['periodo']} ==\n")
+    for p in r["paragrafi"]:
+        print(p + "\n")
+    return 0
+
+
 def cmd_heartbeat(settings, args) -> int:
     """Controlla che il run di oggi sia avvenuto (da schedulare dopo le 16:00)."""
     from datetime import datetime
@@ -160,6 +186,7 @@ def cmd_heartbeat(settings, args) -> int:
         print("Weekend: nessun run atteso.")
         return 0
     store = _state_store(settings)
+    _sync_ancora_mobile(settings, store)  # applica comandi Àncora da mobile
     state = store.read()
     today_id = now.strftime("%Y%m%d")
     if state.last_seal and state.last_seal.get("run_id") == today_id:
@@ -472,6 +499,20 @@ def cmd_status(settings, args) -> int:
 
 def cmd_ancora(settings, args) -> int:
     store = _state_store(settings)
+    if getattr(args, "sync", False):
+        esito = None
+        try:
+            from . import remote
+
+            esito = remote.sync_ancora(settings, store)
+        except Exception as exc:  # noqa: BLE001
+            print(f"Ponte Àncora non disponibile: {exc}", file=sys.stderr)
+            return 1
+        print(
+            f"Comando da mobile applicato: Àncora {esito['stato']}."
+            if esito else "Nessun comando dell'Àncora in attesa dalla PWA."
+        )
+        return 0
     if args.drop:
         store.set_anchor(True)
         print("Àncora CALATA: ogni ordine è bloccato finché non la rialzi.")
@@ -495,6 +536,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("status", help="posizioni, ultimo run, stato Àncora")
     sub.add_parser("verifica", help="riverifica la catena hash del Giornale")
     sub.add_parser("doctor", help="controlli di salute del sistema (diagnostica)")
+    sub.add_parser("narratore", help="diario settimanale in linguaggio naturale")
     sub.add_parser("heartbeat", help="controlla che il run di oggi sia avvenuto")
     sub.add_parser("fiscale", help="riepilogo fiscale annuale + simulatore")
     sub.add_parser("export-ui", help="esporta i dati reali per la Bussola (ui.json)")
@@ -532,6 +574,10 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument(
         "--raise", dest="raise_", action="store_true", help="alza l'Àncora (sblocca)"
     )
+    g.add_argument(
+        "--sync", action="store_true",
+        help="applica un comando dell'Àncora arrivato dalla PWA (Firestore)",
+    )
 
     return parser
 
@@ -543,6 +589,7 @@ _DISPATCH = {
     "ancora": cmd_ancora,
     "verifica": cmd_verifica,
     "doctor": cmd_doctor,
+    "narratore": cmd_narratore,
     "heartbeat": cmd_heartbeat,
     "fiscale": cmd_fiscale,
     "export-ui": cmd_export_ui,

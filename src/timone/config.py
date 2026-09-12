@@ -29,6 +29,9 @@ class Settings:
     base_url: str
     data_dir: Path
     rotta_path: Path
+    #: Percorso del file service-account Firebase (opzionale). Se assente, il
+    #: ponte con la PWA (Àncora da mobile) è semplicemente spento.
+    firebase_service_account: str | None = None
 
 
 def _load_dotenv() -> None:
@@ -61,6 +64,7 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
 
     data_dir = Path(env.get("TIMONE_DATA_DIR", "./data")).expanduser()
     rotta_path = Path(env.get("TIMONE_ROTTA", "./rotta.yaml")).expanduser()
+    service_account = env.get("FIREBASE_SERVICE_ACCOUNT", "").strip() or None
 
     return Settings(
         api_key=api_key,
@@ -68,6 +72,7 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
         base_url=PAPER_BASE_URL,
         data_dir=data_dir,
         rotta_path=rotta_path,
+        firebase_service_account=service_account,
     )
 
 

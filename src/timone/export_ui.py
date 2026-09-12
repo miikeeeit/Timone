@@ -214,6 +214,13 @@ def _doctor_block(settings: Settings) -> dict:
     }
 
 
+def _narratore_block(settings: Settings) -> dict:
+    """Il diario settimanale del Narratore, pronto per la Bussola."""
+    from .narratore import weekly_report
+
+    return weekly_report(settings)
+
+
 def build_ui_json(settings: Settings) -> Path:
     data_dir = Path(settings.data_dir)
     store = JsonStateStore(data_dir / "state.json")
@@ -302,6 +309,7 @@ def build_ui_json(settings: Settings) -> Path:
         "limiti": _limiti_block(state),
         "battito": _battito_block(state),
         "doctor": _doctor_block(settings),
+        "narratore": _narratore_block(settings),
     }
 
     out = data_dir / "ui.json"

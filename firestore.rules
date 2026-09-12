@@ -1,0 +1,28 @@
+rules_version = '2';
+
+// Regole di sicurezza Firestore per Timone.
+//
+// L'unico dato scambiato è il comando dell'Àncora (cala/rialza) che la console
+// web scrive e il motore legge. Queste regole valgono per il client web: il
+// motore usa un service-account (privilegi admin) e non è soggetto a queste
+// regole.
+//
+// L'UID nella regola qui sotto è quello del proprietario (Console Firebase ->
+// Authentication -> "UID utente"): solo quell'account può calare/rialzare
+// l'Àncora, nessun altro. Per un altro deploy, cambia quell'UID.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Comandi dell'Àncora: lettura/scrittura solo al proprietario autenticato.
+    match /timone/{documento} {
+      allow read, write: if request.auth != null
+                         && request.auth.uid == "Mz5B6Kd39PhjHNGtdYEqe9Q56T93";
+    }
+
+    // Tutto il resto: negato per default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

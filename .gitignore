@@ -7,6 +7,9 @@
 *.p12
 credentials*.json
 service-account*.json
+*service-account*.json
+*serviceAccount*.json
+firebase-adminsdk*.json
 
 # ══════════════════════════════════════════════════════════════════
 #  Dati generati dal sistema (posizioni, operazioni, stato, log)

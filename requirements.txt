@@ -4,6 +4,11 @@ alpaca-py==0.43.5
 PyYAML==6.0.3
 python-dotenv==1.2.2
 
+# Ponte con la PWA per l'Àncora da mobile (OPZIONALE):
+#   pip install firebase-admin
+# Serve solo se configuri FIREBASE_SERVICE_ACCOUNT; senza, il motore ignora il ponte.
+# firebase-admin==7.5.0
+
 # Sviluppo / test (opzionale):
 #   pip install pytest
 # pytest==9.1.1
