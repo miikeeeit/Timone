@@ -4,16 +4,20 @@ Funzione pura e deterministica: stessi input -> stessi ordini. Nessuna chiamata
 di rete, nessuno stato, nessuna casualità. Ragiona interamente in EUR: il motore
 converte i valori delle posizioni da USD a EUR prima di chiamarla.
 
-Due modalità, decise dallo scostamento dei pesi correnti dai target:
+**Il motore non vende mai da solo.** L'unica azione autonoma di Timone è
+fermarsi (calare l'Àncora); vendere è sempre una decisione dell'utente
+(`timone approdo`). Di conseguenza la strategia emette SOLO ordini di acquisto.
 
-* **DCA (nessun asset fuori banda)** — l'importo del run viene distribuito
-  SOLO in acquisto, indirizzandolo ai ticker sottopesati rispetto al target
-  calcolato sul totale post-versamento. Nessuna vendita: si ribilancia con i
-  nuovi versamenti, minimizzando i costi di transazione.
+L'importo del run viene distribuito sui ticker sottopesati rispetto al target
+calcolato sul totale post-versamento. Si ribilancia con i nuovi versamenti,
+minimizzando i costi di transazione.
 
-* **Ribilanciamento (almeno un asset oltre la soglia)** — si generano ordini
-  (acquisti e vendite) per riportare ogni asset esattamente al target sul
-  totale post-versamento.
+Lo scostamento dei pesi correnti dai target cambia solo *come viene motivato*
+l'ordine nel Giornale:
+
+* **entro banda** — normale DCA sui sottopesati;
+* **oltre la soglia** — stessa azione, ma registrata come "ribilanciamento
+  senza vendite", con l'invito esplicito a decidere tu se ridurre il sovrappeso.
 """
 
 from __future__ import annotations
@@ -55,27 +59,10 @@ def compute_orders(
 
     orders: list[ProposedOrder] = []
 
-    if out_of_band:
-        # Ribilanciamento completo verso i target sul totale post-versamento.
-        for t in sorted(tickers):
-            delta = target_value[t] - current[t]
-            if abs(delta) < MIN_ORDER_EUR:
-                continue
-            side = OrderSide.BUY if delta > 0 else OrderSide.SELL
-            orders.append(
-                ProposedOrder(
-                    ticker=t,
-                    side=side,
-                    notional_eur=round(abs(delta), 2),
-                    reason=(
-                        f"Ribilanciamento: peso {weights_now[t]:.1f}% vs target "
-                        f"{rotta.weight_of(t):.1f}% (soglia {rotta.rebalance_threshold_pct:.1f}pp)."
-                    ),
-                )
-            )
-        return orders
-
-    # Modalità DCA: distribuisci l'importo del run sui soli sottopesati.
+    # Il motore NON vende mai da solo, nemmeno per ribilanciare: distribuisce
+    # SEMPRE il solo versamento sui sottopesati. Fuori banda cambia il motivo
+    # registrato (e l'avviso), non l'azione: ridurre un sovrappeso resta una
+    # decisione dell'utente (`timone approdo`).
     shortfall = {t: max(0.0, target_value[t] - current[t]) for t in tickers}
     total_shortfall = sum(shortfall.values())
     if total_shortfall <= 0:
@@ -87,15 +74,24 @@ def compute_orders(
         notional = amount * shortfall[t] / total_shortfall
         if notional < MIN_ORDER_EUR:
             continue
+        if out_of_band:
+            reason = (
+                f"Ribilanciamento senza vendite: peso {weights_now[t]:.1f}% vs "
+                f"target {rotta.weight_of(t):.1f}% "
+                f"(soglia {rotta.rebalance_threshold_pct:.1f}pp). Il motore non "
+                "vende: per ridurre un sovrappeso decidi tu, con `timone approdo`."
+            )
+        else:
+            reason = (
+                f"DCA: versamento indirizzato al sottopeso "
+                f"(target {rotta.weight_of(t):.1f}%)."
+            )
         orders.append(
             ProposedOrder(
                 ticker=t,
                 side=OrderSide.BUY,
                 notional_eur=round(notional, 2),
-                reason=(
-                    f"DCA: versamento indirizzato al sottopeso "
-                    f"(target {rotta.weight_of(t):.1f}%)."
-                ),
+                reason=reason,
             )
         )
     return orders

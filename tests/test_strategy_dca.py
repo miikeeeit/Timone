@@ -63,20 +63,37 @@ def test_dca_nessuna_vendita_quando_in_banda():
     assert sum(o.notional_eur for o in orders) == pytest.approx(100.0)
 
 
-def test_ribilanciamento_quando_fuori_banda_genera_vendite():
-    # AAA fortemente sovrappeso oltre soglia -> ribilanciamento con vendita.
+def test_fuori_banda_ribilancia_senza_mai_vendere():
+    # AAA fortemente sovrappeso oltre soglia: il motore NON vende. Indirizza
+    # tutto il versamento sui sottopesati e lo motiva come ribilanciamento.
     rotta = make_rotta(threshold=5.0, amount=100.0)
     current = {"AAA": 800.0, "BBB": 150.0, "CCC": 50.0}  # totale 1000
     # pesi 80/15/5 vs target 50/30/20 -> fuori banda
     orders = compute_orders(rotta, current)
     m = as_map(orders)
-    # new_total 1100: target AAA 550 (delta -250 -> SELL), BBB 330 (+180 BUY), CCC 220 (+170 BUY)
-    assert m["AAA"].side is OrderSide.SELL
-    assert m["AAA"].notional_eur == pytest.approx(250.0)
-    assert m["BBB"].side is OrderSide.BUY
-    assert m["BBB"].notional_eur == pytest.approx(180.0)
-    assert m["CCC"].side is OrderSide.BUY
-    assert m["CCC"].notional_eur == pytest.approx(170.0)
+    # new_total 1100: target AAA 550 (già sopra -> nessun ordine),
+    # BBB 330 (shortfall 180), CCC 220 (shortfall 170); totale shortfall 350.
+    assert all(o.side is OrderSide.BUY for o in orders), "il motore non deve mai vendere"
+    assert "AAA" not in m, "il sovrappeso non viene venduto, solo non alimentato"
+    assert m["BBB"].notional_eur == pytest.approx(100.0 * 180 / 350, abs=0.01)
+    assert m["CCC"].notional_eur == pytest.approx(100.0 * 170 / 350, abs=0.01)
+    # si investe esattamente il versamento, mai di più
+    assert sum(o.notional_eur for o in orders) == pytest.approx(100.0, abs=0.02)
+    assert "senza vendite" in m["BBB"].reason
+
+
+def test_nessun_ordine_di_vendita_in_nessuno_scenario():
+    """Rete di sicurezza: qualunque configurazione, mai un SELL."""
+    rotta = make_rotta(threshold=5.0, amount=100.0)
+    scenari = [
+        {"AAA": 800.0, "BBB": 150.0, "CCC": 50.0},   # AAA enorme sovrappeso
+        {"AAA": 0.0, "BBB": 0.0, "CCC": 990.0},      # CCC quasi tutto
+        {"AAA": 10.0, "BBB": 10.0, "CCC": 10.0},     # portafoglio minuscolo
+        {"AAA": 0.0, "BBB": 0.0, "CCC": 0.0},        # primo run
+    ]
+    for current in scenari:
+        for o in compute_orders(rotta, current):
+            assert o.side is OrderSide.BUY, f"vendita generata con {current}"
 
 
 def test_scarta_ordini_polvere():

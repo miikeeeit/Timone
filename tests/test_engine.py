@@ -45,9 +45,11 @@ def test_dry_run_con_posizioni(tmp_path, rotta, now_in_window, fx_one):
     broker = FakeBroker(positions=positions)
     engine, broker, store = make_engine(tmp_path, rotta, now_in_window, fx_one, broker=broker)
     report = engine.run(dry_run=True)
-    # AAA fortemente sovrappeso -> ribilanciamento con una vendita.
+    # AAA fortemente sovrappeso: il motore NON vende, si limita a non alimentarlo
+    # e indirizza il versamento sui sottopesati.
     sides = {d.order.ticker: d.order.side.value for d in report.decisions}
-    assert sides["AAA"] == "sell"
+    assert "AAA" not in sides, "il sovrappeso non va venduto dal motore"
+    assert set(sides.values()) == {"buy"}
     assert broker.submitted == []
 
 

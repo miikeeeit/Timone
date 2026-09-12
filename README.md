@@ -61,7 +61,7 @@ Questa è la sezione che spiega *come ragiono*: le scelte non ovvie, e cosa ho s
 
 **Alternativa scartata:** il ribilanciamento a calendario (es. "ogni trimestre riporta tutto ai pesi target").
 
-**Perché:** il calendario è arbitrario rispetto a ciò che conta davvero, cioè *quanto* il portafoglio ha deviato. Ribilancia anche quando non serve (generando costi inutili) e ignora derive importanti tra una data e l'altra. Le soglie legano l'azione alla causa reale — lo scostamento — riducendo il numero di operazioni su un capitale piccolo, dove i costi di transazione sono il vero avversario. In più, indirizzando i *nuovi versamenti* verso i titoli sottopesati, il sistema ribilancia spesso senza dover vendere nulla.
+**Perché:** il calendario è arbitrario rispetto a ciò che conta davvero, cioè *quanto* il portafoglio ha deviato. Ribilancia anche quando non serve (generando costi inutili) e ignora derive importanti tra una data e l'altra. Le soglie legano l'azione alla causa reale — lo scostamento — riducendo il numero di operazioni su un capitale piccolo, dove i costi di transazione sono il vero avversario. In più, il ribilanciamento avviene **solo indirizzando i nuovi versamenti** verso i titoli sottopesati: il motore non vende mai per tornare ai pesi target. Se un titolo è sovrappeso oltre la soglia, semplicemente smette di alimentarlo e lo segnala — ridurlo resta una decisione tua.
 
 ### 2. Nessuna regola di ingresso discrezionale, nessun consiglio sui titoli
 
@@ -84,7 +84,7 @@ Questa è la sezione che spiega *come ragiono*: le scelte non ovvie, e cosa ho s
 - **Guardrail nel codice, non nella configurazione.** Importo massimo per ordine, budget giornaliero, whitelist dei ticker, finestra oraria, tetto agli ordini per run: sono costanti nel motore, verificate prima di ogni ordine. Renderli più permissivi richiede un periodo di attesa di 72 ore e una doppia conferma; restringerli è immediato. Il tempo è parte della protezione.
 - **Solo paper trading, per costruzione.** L'endpoint reale di Alpaca è rifiutato dal codice: nessun percorso verso denaro vero, nemmeno per errore di configurazione.
 - **Rischio di cambio tracciato a parte.** Con titoli quotati in USD, il rendimento in euro è due storie distinte — i titoli e il cambio EUR/USD — e il sistema le tiene separate invece di confonderle in un unico numero.
-- **Vendere è sempre un gesto manuale.** L'unica azione che il motore compie da solo è *fermarsi* (calare l'Àncora); comprare è schedulato, vendere è deciso dall'utente. Le soglie di uscita, quando impostate, **avvisano soltanto**.
+- **Vendere è sempre un gesto manuale.** L'unica azione che il motore compie da solo è *fermarsi* (calare l'Àncora); comprare è schedulato, vendere è deciso dall'utente — **ribilanciamento incluso**: la strategia emette solo ordini di acquisto, per costruzione. Le soglie di uscita, quando impostate, **avvisano soltanto**.
 - **Tracciabilità a prova di manomissione.** Ogni run è sigillato in una catena hash (SHA-256 concatenato): lo storico è verificabile e una modifica retroattiva spezza la catena.
 
 ---
