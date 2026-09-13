@@ -73,6 +73,7 @@ def cmd_run(settings, args) -> int:
 
     store = _state_store(settings)
     _sync_ancora_mobile(settings, store)  # applica comandi Àncora da mobile
+    ancora_prima = store.read().anchor_down
     try:
         engine = _build_engine(settings)
         report = engine.run(dry_run=False)
@@ -104,11 +105,17 @@ def cmd_run(settings, args) -> int:
             state.add_avviso("Àncora auto-calata", state.anchor_reason, when)
         store.write(state)
         _notify("Timone — run fallito", str(exc)[:120])
+        _push(settings, "Timone — run fallito", str(exc)[:150])
         raise
     state = store.read()
     if state.failed_runs:
         state.failed_runs = 0
         store.write(state)
+    if state.anchor_down and not ancora_prima:
+        _push(
+            settings, "Timone — Àncora calata",
+            state.anchor_reason or "Il motore si è fermato da solo.",
+        )
     print(build_summary(report))
 
     # Quarantena: la candidata gira in dry-run ombra, ogni giorno di prova.
@@ -141,6 +148,17 @@ def cmd_run(settings, args) -> int:
         except Exception as exc:  # noqa: BLE001 - la prova non ferma il reale
             print(f"(dry-run di quarantena non riuscito: {exc})")
     return 0
+
+
+def _push(settings, titolo: str, testo: str) -> None:
+    """Notifica push sui dispositivi registrati. Solo per le ECCEZIONI.
+    Best-effort: il ponte spento o irraggiungibile non ferma nulla."""
+    try:
+        from . import remote
+
+        remote.invia_notifica(settings, titolo, testo)
+    except Exception:  # noqa: BLE001 - mai bloccare per una notifica
+        pass
 
 
 def _notify(title: str, text: str) -> None:
@@ -285,6 +303,7 @@ def cmd_heartbeat(settings, args) -> int:
     state.add_avviso("Heartbeat mancato", msg, now.date().isoformat())
     store.write(state)
     _notify("Timone — battito mancato", msg)
+    _push(settings, "Timone — battito mancato", msg)
     print("BATTITO MANCATO — " + msg)
     return 1
 

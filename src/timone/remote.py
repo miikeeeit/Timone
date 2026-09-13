@@ -33,6 +33,7 @@ from .config import Settings
 _COLLECTION = "timone"
 _DOC = "ancora"
 _UI_DOC = "ui"
+_NOTIFICHE_DOC = "notifiche"
 
 
 class RemoteStore(ABC):
@@ -46,6 +47,12 @@ class RemoteStore(ABC):
         raise NotImplementedError
 
     def get_ui_generated_at(self) -> str | None:  # pragma: no cover - interfaccia
+        raise NotImplementedError
+
+    def get_token_notifiche(self) -> list[str]:  # pragma: no cover - interfaccia
+        raise NotImplementedError
+
+    def rimuovi_token(self, token: str) -> None:  # pragma: no cover - interfaccia
         raise NotImplementedError
 
 
@@ -72,6 +79,19 @@ class _FirestoreStore(RemoteStore):
         if not snap.exists:
             return None
         return (snap.to_dict() or {}).get("generated_at")
+
+    def _rif_notifiche(self):
+        return self._db.collection(_COLLECTION).document(_NOTIFICHE_DOC)
+
+    def get_token_notifiche(self) -> list[str]:
+        snap = self._rif_notifiche().get()
+        if not snap.exists:
+            return []
+        return list((snap.to_dict() or {}).get("tokens") or [])
+
+    def rimuovi_token(self, token: str) -> None:
+        rimasti = [t for t in self.get_token_notifiche() if t != token]
+        self._rif_notifiche().set({"tokens": rimasti}, merge=True)
 
 
 def firestore_store(settings: Settings) -> RemoteStore | None:
@@ -109,6 +129,59 @@ def publish_ui(
         return False
     remote.publish_ui(payload)
     return True
+
+
+def invia_notifica(
+    settings: Settings, titolo: str, testo: str, *, remote: RemoteStore | None = None
+) -> int:
+    """Invia una notifica push ai dispositivi registrati. Ritorna quanti raggiunti.
+
+    Solo per le ECCEZIONI (Àncora calata, run fallito, battito mancato): una
+    console che notifica l'ordinario spingerebbe a guardare, ed è esattamente
+    il comportamento che il progetto vuole evitare. Il silenzio è una buona
+    notizia, anche qui.
+
+    Best-effort: se il ponte è spento o l'invio fallisce, il motore prosegue.
+    I token non più validi vengono rimossi da soli.
+    """
+    remote = remote if remote is not None else firestore_store(settings)
+    if remote is None:
+        return 0
+    tokens = remote.get_token_notifiche()
+    if not tokens:
+        return 0
+
+    from firebase_admin import messaging
+
+    inviati = 0
+    falliti: list[str] = []
+    for token in tokens:
+        try:
+            # `fid` (non `token`): in firebase-admin 7.x il campo è stato
+            # rinominato e il vecchio nome emette un DeprecationWarning.
+            messaging.send(
+                messaging.Message(
+                    notification=messaging.Notification(title=titolo, body=testo),
+                    fid=token,
+                )
+            )
+            inviati += 1
+        except Exception as exc:  # noqa: BLE001 - un invio fallito non è un guasto
+            msg = str(exc)
+            if "not-registered" in msg or "Requested entity was not found" in msg:
+                remote.rimuovi_token(token)  # app disinstallata: si pulisce da sé
+            else:
+                falliti.append(msg[:120])
+    if falliti:
+        # Non si inghiotte in silenzio: un canale d'avviso che tace quando si
+        # rompe è peggio che non averlo.
+        import sys
+
+        print(
+            f"(notifiche: {len(falliti)} invii non riusciti — {falliti[0]})",
+            file=sys.stderr,
+        )
+    return inviati
 
 
 def sync_ancora(

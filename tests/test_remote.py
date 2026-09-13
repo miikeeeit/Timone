@@ -25,6 +25,13 @@ class FakeRemote(remote.RemoteStore):
     def publish_ui(self, payload):
         self.pubblicato = payload
 
+    def get_token_notifiche(self):
+        return list(getattr(self, "tokens", []))
+
+    def rimuovi_token(self, token):
+        self.rimossi = getattr(self, "rimossi", []) + [token]
+        self.tokens = [t for t in getattr(self, "tokens", []) if t != token]
+
 
 def _settings(tmp_path: Path, sa: str | None = None) -> Settings:
     return Settings(
@@ -104,3 +111,43 @@ def test_publish_ui_manda_il_payload_al_remoto(tmp_path):
 def test_publish_ui_no_op_senza_service_account(tmp_path):
     """Ponte spento: nessuna pubblicazione, i dati restano solo sul Mac."""
     assert remote.publish_ui(_settings(tmp_path), {"x": 1}) is False
+
+
+# --- notifiche push (solo eccezioni) ------------------------------------------
+
+def test_notifiche_ponte_spento(tmp_path):
+    assert remote.invia_notifica(_settings(tmp_path), "t", "x") == 0
+
+
+def test_notifiche_nessun_dispositivo_registrato(tmp_path):
+    fake = FakeRemote()
+    fake.tokens = []
+    assert remote.invia_notifica(_settings(tmp_path), "t", "x", remote=fake) == 0
+
+
+def test_notifica_inviata_a_ogni_dispositivo(tmp_path, monkeypatch):
+    from firebase_admin import messaging
+
+    inviati = []
+    monkeypatch.setattr(
+        messaging, "send", lambda m: inviati.append(getattr(m, "fid", None))
+    )
+    fake = FakeRemote()
+    fake.tokens = ["telefono", "tablet"]
+    n = remote.invia_notifica(_settings(tmp_path), "Àncora calata", "drawdown", remote=fake)
+    assert n == 2
+    assert inviati == ["telefono", "tablet"]
+
+
+def test_token_di_un_dispositivo_sparito_viene_rimosso(tmp_path, monkeypatch):
+    """Un'app disinstallata non è un guasto: il token si toglie da solo."""
+    from firebase_admin import messaging
+
+    def sparito(_m):
+        raise RuntimeError("Requested entity was not found.")
+
+    monkeypatch.setattr(messaging, "send", sparito)
+    fake = FakeRemote()
+    fake.tokens = ["morto"]
+    assert remote.invia_notifica(_settings(tmp_path), "t", "x", remote=fake) == 0
+    assert fake.rimossi == ["morto"]

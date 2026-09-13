@@ -11,6 +11,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
 <style>
   html,body{margin:0;padding:0;background:var(--desk);}
   *{box-sizing:border-box;}
@@ -95,17 +96,61 @@ const BELL = col => `<svg width="20" height="20" viewBox="0 0 24 24" fill="none"
 
 const props = { mostraVaro: true, scenario: 'normale', temaNotte: false };
 /* ---- accesso: Firebase Auth (email+password). Le chiavi Alpaca NON entrano mai qui ---- */
-let AUTH = null, USER = undefined, DB = null;
+let AUTH = null, USER = undefined, DB = null, MSG = null;
+
+/* Notifiche push: SOLO per le eccezioni (Àncora calata, run fallito, battito
+   mancato). Una console che notifica l'ordinario spingerebbe a guardare, ed è
+   il comportamento che il progetto vuole evitare.
+   La chiave VAPID è pubblica per costruzione (come apiKey): sta nel client.
+   Console Firebase -> Cloud Messaging -> Web Push certificates. */
+const VAPID_KEY = "";
+
+function pushStato(){
+  if(!MSG || typeof Notification === 'undefined') return 'non supportate';
+  if(Notification.permission === 'denied') return 'bloccate dal browser';
+  if(Notification.permission === 'granted'){
+    try{ if(localStorage.getItem('timone-push')==='1') return 'attive'; }catch(e){}
+  }
+  return 'non attive';
+}
+
+async function attivaNotifiche(){
+  if(!MSG){ showToast('Questo dispositivo non supporta le notifiche push'); return; }
+  if(!VAPID_KEY){ showToast('Notifiche non ancora configurate: manca la chiave VAPID'); return; }
+  if(!USER || !DB){ showToast('Entra nella console prima di attivare le notifiche'); return; }
+  try{
+    const perm = await Notification.requestPermission();
+    if(perm !== 'granted'){ showToast('Permesso negato: le notifiche restano spente'); render(); return; }
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    const token = await MSG.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
+    if(!token){ showToast('Token non ottenuto: riprova fra un momento'); return; }
+    const rif = DB.collection('timone').doc('notifiche');
+    const snap = await rif.get();
+    const tokens = (snap.exists && (snap.data().tokens||[])) || [];
+    if(tokens.indexOf(token) < 0) await rif.set({tokens: tokens.concat([token])}, {merge:true});
+    try{ localStorage.setItem('timone-push','1'); }catch(e){}
+    showToast('Notifiche attive: riceverai solo le eccezioni');
+    render();
+  }catch(e){ showToast('Attivazione non riuscita: ' + ((e && (e.code||e.message)) || 'errore')); }
+}
 try{
   firebase.initializeApp({
     apiKey: "AIzaSyAaNkOzoVu5sbGALnNjKNtAXpe9hl8x5Pc",
     authDomain: "timone-8699e.firebaseapp.com",
     projectId: "timone-8699e",
+    messagingSenderId: "946988635365",
     appId: "1:946988635365:web:5ba7eeeb6326f74a30300c",
   });
   AUTH = firebase.auth();
   AUTH.onAuthStateChanged(u => { USER = u; state.authBusy = false; render(); if(u) caricaDati(); });
   try{ DB = firebase.firestore(); }catch(e){ DB = null; }
+  try{
+    if(firebase.messaging && firebase.messaging.isSupported && firebase.messaging.isSupported()){
+      MSG = firebase.messaging();
+      // App aperta: niente notifica di sistema, basta un avviso discreto.
+      MSG.onMessage(p => showToast(((p.notification||{}).title||'Timone') + ' — ' + ((p.notification||{}).body||'')));
+    }
+  }catch(e){ MSG = null; }
 }catch(e){ AUTH = null; }
 
 /* ---- Àncora azionabile da mobile: la PWA scrive solo un INTENTO su Firestore.
@@ -828,6 +873,7 @@ function menuOverlay(d){
   <div style="position:absolute;top:52px;right:16px;width:220px;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 10px 30px rgba(27,38,59,0.16);padding:6px;display:flex;flex-direction:column;animation:fadeIn .15s ease;">
     <div data-action="goFiscale" style="display:flex;justify-content:space-between;align-items:center;padding:12px 12px;border-radius:9px;cursor:pointer;"><span style="font:500 14px 'Space Grotesk',sans-serif;">Fiscale</span><span style="font:400 11px 'JetBrains Mono',monospace;color:var(--muted);">2026</span></div>
     <div data-action="goDiagnostica" style="display:flex;justify-content:space-between;align-items:center;padding:12px 12px;border-radius:9px;cursor:pointer;"><span style="font:500 14px 'Space Grotesk',sans-serif;">Diagnostica</span><span style="${dot('var(--ok)')}"></span></div>
+    <div data-action="attivaPush" style="display:flex;justify-content:space-between;align-items:center;padding:12px 12px;border-radius:9px;cursor:pointer;"><span style="font:500 14px 'Space Grotesk',sans-serif;">Notifiche</span><span style="font:400 11px 'JetBrains Mono',monospace;color:${pushStato()==='attive'?'var(--ok)':'var(--muted)'};">${pushStato()}</span></div>
     <div style="border-top:1px solid var(--line);margin:4px 8px;"></div>
     ${USER?`<div data-action="authEsci" style="display:flex;justify-content:space-between;align-items:center;padding:12px 12px;border-radius:9px;cursor:pointer;"><span style="font:500 14px 'Space Grotesk',sans-serif;">Esci</span><span style="font:400 11px 'JetBrains Mono',monospace;color:var(--muted);">${esc((USER.email||'').slice(0,18))}</span></div><div style="border-top:1px solid var(--line);margin:4px 8px;"></div>`:''}
     <div style="padding:9px 12px;font:400 11px 'JetBrains Mono',monospace;color:var(--muted);">Timone v0.5 · paper trading</div>
@@ -928,6 +974,7 @@ const actions = {
       .then(()=>setState({authBusy:false, authInfo:'Ti ho inviato un’email per reimpostare la password: controlla la posta (anche lo spam).'}))
       .catch(e=>setState({authBusy:false, authErr:'Invio non riuscito: controlla che l’email sia scritta bene.'}));
   },
+  attivaPush(){ if(pushStato()==='attive'){ showToast('Notifiche già attive su questo dispositivo'); return; } attivaNotifiche(); },
   authEsci(){ if(AUTH) AUTH.signOut(); setState({menu:false, lpass:''}); },
   varoAvanti1(){ if(state.chiaveApi.trim().length>=4 && state.chiaveSegreta.trim().length>=4) setState({varoStep:2}); },
   varoAvanti2(){ if(varoValidation().ok) setState({varoStep:3, varoActiveT:null}); },
