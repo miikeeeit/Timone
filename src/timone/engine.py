@@ -23,7 +23,7 @@ from . import route_control, safety
 from .broker_alpaca import Broker
 from .fiscal import FiscalLog, fetch_eur_usd, get_eur_usd
 from .guardrails import ROME
-from .logbook import GENESIS, Logbook, build_summary
+from .logbook import GENESIS, Logbook, NullLogbook, build_summary
 from .models import OrderDecision, OrderSide, Rotta, RunReport
 from .state import StateStore
 from .strategy_dca import compute_orders
@@ -57,11 +57,41 @@ class Engine:
         date_iso = now.date().isoformat()
 
         report = RunReport(run_id=run_id, started_at=now.isoformat())
-        logbook = Logbook(self.data_dir / "logbook" / f"{run_id}.jsonl", run_id)
+        # Un dry-run è una prova: non scrive nel registro sigillato del giorno.
+        logbook = (
+            NullLogbook(run_id)
+            if dry_run
+            else Logbook(self.data_dir / "logbook" / f"{run_id}.jsonl", run_id)
+        )
         logbook.event("run_start", dry_run=dry_run, ora_roma=now.isoformat())
 
         state = self.store.read()
+        try:
+            return self._execute(
+                report, logbook, state, now, run_id, date_iso, dry_run
+            )
+        except Exception as exc:  # noqa: BLE001 - si rilancia sempre
+            # Anche un run che FALLISCE deve lasciare traccia nel Giornale.
+            # Senza questo il registro conserva un frammento senza riassunto né
+            # sigillo, e il motivo del guasto vive solo negli avvisi: una falla
+            # in un sistema che promette "ogni run è sigillato e verificabile".
+            if not dry_run:
+                try:
+                    self._fail(report, logbook, exc, state)
+                except Exception:  # noqa: BLE001 - mai mascherare l'errore vero
+                    pass
+            raise
 
+    def _execute(
+        self,
+        report: RunReport,
+        logbook: Logbook,
+        state,
+        now: datetime,
+        run_id: str,
+        date_iso: str,
+        dry_run: bool,
+    ) -> RunReport:
         # --- Gate a livello di run (in dry-run si annotano ma non fermano) ---
         anchor = gr.check_anchor(state.anchor_down)
         logbook.event("guardrail", **_gr(anchor))
@@ -266,6 +296,18 @@ class Engine:
             # Anche un run interrotto è un anello della catena.
             self._seal_and_save(logbook, state)
         return report
+
+    def _fail(self, report: RunReport, logbook: Logbook, exc: BaseException, state) -> None:
+        """Registra nel Giornale un run interrotto da un errore, e lo sigilla."""
+        motivo = f"Run fallito: {type(exc).__name__}: {exc}"
+        report.halted_reason = motivo
+        logbook.event(
+            "run_fallito",
+            errore=type(exc).__name__,
+            messaggio=str(exc)[:500],
+        )
+        logbook.summary(build_summary(report))
+        self._seal_and_save(logbook, state)
 
     def _seal_and_save(self, logbook: Logbook, state) -> None:
         prev = (state.last_seal or {}).get("hash", GENESIS)

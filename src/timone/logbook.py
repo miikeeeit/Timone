@@ -48,6 +48,27 @@ class Logbook:
         return digest
 
 
+class NullLogbook:
+    """Giornale che non scrive nulla: usato nei dry-run.
+
+    Un dry-run è una prova, non un run: non deve lasciare eventi nel registro
+    sigillato del giorno. Prima li lasciava, e i parser dovevano imparare a
+    saltarli — rumore in un archivio che si vuole a prova di manomissione.
+    """
+
+    def __init__(self, run_id: str):
+        self.run_id = run_id
+
+    def event(self, kind: str, **fields) -> None:
+        pass
+
+    def summary(self, testo: str) -> None:
+        pass
+
+    def seal(self, prev_hash: str) -> str:  # pragma: no cover - mai sigillato
+        raise RuntimeError("un dry-run non si sigilla")
+
+
 GENESIS = "0" * 64
 
 

@@ -1,11 +1,19 @@
 #!/bin/sh
-# Pubblica la Bussola su Firebase Hosting con i dati correnti.
-# La cartella hosting/ è generata: contiene SOLO l'app e ui.json
-# (mai .env, state.json, fiscale.csv o il Giornale).
+# Pubblica la Bussola su Firebase Hosting.
+# La cartella hosting/ è generata: contiene SOLO l'app e l'anagrafica dei
+# simboli negoziabili (un elenco pubblico di ticker, non un dato personale).
+#
+# I DATI DEL PORTAFOGLIO NON SI PUBBLICANO PIÙ QUI. Un file su Hosting è
+# leggibile da chiunque conosca l'URL: il login della PWA è un gate JavaScript,
+# non protegge i file statici. I dati vivono su Firestore, dove le regole li
+# lasciano leggere solo al proprietario autenticato (li scrive `timone export-ui`).
 set -e
 cd "$(dirname "$0")/.."
 rm -rf hosting && mkdir -p hosting/data
 cp app/index.html hosting/index.html
-cp data/ui.json hosting/data/ui.json
-[ -f data/simboli.json ] && cp data/simboli.json hosting/data/simboli.json
+# `if` invece di `[ ... ] && cp`: con `set -e` un test negativo faceva uscire lo
+# script PRIMA del deploy, saltandolo in silenzio.
+if [ -f data/simboli.json ]; then
+  cp data/simboli.json hosting/data/simboli.json
+fi
 firebase deploy --only hosting --project timone-8699e --non-interactive

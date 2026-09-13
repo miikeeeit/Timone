@@ -76,3 +76,15 @@ def test_dati_con_backup_ok(tmp_path):
     (tmp_path / "state.json").write_text("{}", encoding="utf-8")
     (tmp_path / "state.json.bak").write_text("{}", encoding="utf-8")
     assert doctor._dati(tmp_path).esito == doctor.OK
+
+
+def test_bussola_ponte_spento_avvisa(tmp_path):
+    """Senza service account la console web non riceve dati: va detto."""
+    c = doctor._bussola(_settings(tmp_path))
+    assert c.esito == doctor.WARN
+    assert "non riceve dati" in c.dettaglio
+
+
+def test_run_checks_include_la_bussola(tmp_path):
+    ids = [c.id for c in doctor.run_checks(_settings(tmp_path))]
+    assert "bussola" in ids

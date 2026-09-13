@@ -69,11 +69,30 @@ def _build_engine(settings):
 
 
 def cmd_run(settings, args) -> int:
+    from .broker_alpaca import TransientNetworkError
+
     store = _state_store(settings)
     _sync_ancora_mobile(settings, store)  # applica comandi Àncora da mobile
     try:
         engine = _build_engine(settings)
         report = engine.run(dry_run=False)
+    except TransientNetworkError as exc:
+        # La rete non c'era (tipico: il Mac si è appena svegliato). Nessun
+        # ordine è stato inviato e nulla è rotto: si annota e si riprova al
+        # prossimo run. NON incrementa failed_runs, quindi non fa calare
+        # l'Àncora: sarebbe un falso positivo.
+        state = store.read()
+        when = __import__("datetime").date.today().isoformat()
+        state.add_avviso(
+            "Rete non disponibile",
+            f"{exc}. Nessun ordine inviato, il run non è partito. "
+            "Non conta come run fallito.",
+            when,
+        )
+        store.write(state)
+        _notify("Timone — rete non disponibile", str(exc)[:120])
+        print(f"Rete non disponibile — {exc}", file=sys.stderr)
+        return 1
     except Exception as exc:  # noqa: BLE001 - conta i run falliti
         state = store.read()
         state.failed_runs += 1

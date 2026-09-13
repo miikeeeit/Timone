@@ -109,6 +109,47 @@ def _catena(data_dir: Path) -> Check:
     return Check("catena", "Integrità del Giornale", "la catena non torna", ERR)
 
 
+def _bussola(settings: Settings) -> Check:
+    """La console web sta ricevendo i dati?
+
+    Il deploy poteva fallire in silenzio (credenziali Firebase scadute, script
+    interrotto): la Bussola online restava ferma per settimane senza che nessuno
+    se ne accorgesse. Qui si confronta la pubblicazione con l'export locale.
+    """
+    import json
+    from pathlib import Path
+
+    try:
+        from .remote import firestore_store
+
+        remote = firestore_store(settings)
+    except Exception:  # noqa: BLE001
+        return Check("bussola", "Bussola online", "non verificabile ora", WARN)
+    if remote is None:
+        return Check("bussola", "Bussola online",
+                     "ponte spento: la console web non riceve dati", WARN)
+    try:
+        remoto = remote.get_ui_generated_at()
+    except Exception:  # noqa: BLE001
+        return Check("bussola", "Bussola online", "non raggiungibile ora", WARN)
+    if not remoto:
+        return Check("bussola", "Bussola online",
+                     "mai pubblicata: la console web è vuota", ERR)
+
+    locale = None
+    f = Path(settings.data_dir) / "ui.json"
+    if f.exists():
+        try:
+            locale = json.loads(f.read_text(encoding="utf-8")).get("generated_at")
+        except Exception:  # noqa: BLE001
+            locale = None
+    quando = str(remoto)[:16].replace("T", " ")
+    if locale and str(remoto) < str(locale):
+        return Check("bussola", "Bussola online",
+                     f"pubblicazione ferma al {quando}: il deploy non passa", WARN)
+    return Check("bussola", "Bussola online", f"aggiornata · {quando}", OK)
+
+
 def _ancora(state) -> Check:
     if state.anchor_down:
         return Check("ancora", "Àncora",
@@ -128,6 +169,7 @@ def run_checks(settings: Settings) -> list[Check]:
         _scheduler(),
         _dati(data_dir),
         _catena(data_dir),
+        _bussola(settings),
         _ancora(state),
     ]
 

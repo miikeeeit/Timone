@@ -53,6 +53,56 @@ def test_dry_run_con_posizioni(tmp_path, rotta, now_in_window, fx_one):
     assert broker.submitted == []
 
 
+def test_run_fallito_lascia_traccia_sigillata_nel_giornale(
+    tmp_path, rotta, now_in_window, fx_one
+):
+    """Un run interrotto da un errore non deve sparire dal Giornale: senza
+    riassunto e sigillo resterebbe un frammento, e il registro mentirebbe."""
+    import json
+
+    class BrokerRotto(FakeBroker):
+        def is_market_open(self):
+            raise RuntimeError("broker irraggiungibile")
+
+    engine, _broker, store = make_engine(
+        tmp_path, rotta, now_in_window, fx_one, broker=BrokerRotto()
+    )
+    with pytest.raises(RuntimeError):
+        engine.run(dry_run=False)
+
+    righe = [
+        json.loads(l)
+        for l in (tmp_path / "logbook" / "20260706.jsonl").read_text().splitlines()
+        if l.strip()
+    ]
+    kinds = [r.get("kind") for r in righe]
+    assert "run_fallito" in kinds, "il motivo del guasto deve stare nel Giornale"
+    assert "riassunto" in kinds
+    assert "sigillo" in kinds, "anche un run fallito è un anello della catena"
+    assert store.read().last_seal["run_id"] == "20260706"
+
+
+def test_dry_run_non_scrive_nel_giornale(tmp_path, rotta, now_in_window, fx_one):
+    """Un dry-run è una prova, non un run: non deve lasciare NULLA nel registro
+    sigillato — nemmeno se fallisce."""
+    engine, _broker, store = make_engine(tmp_path, rotta, now_in_window, fx_one)
+    engine.run(dry_run=True)
+    assert not (tmp_path / "logbook" / "20260706.jsonl").exists()
+    assert store.read().last_seal is None
+
+    class BrokerRotto(FakeBroker):
+        def get_positions(self):
+            raise RuntimeError("broker irraggiungibile")
+
+    engine2, _b, store2 = make_engine(
+        tmp_path, rotta, now_in_window, fx_one, broker=BrokerRotto()
+    )
+    with pytest.raises(RuntimeError):
+        engine2.run(dry_run=True)
+    assert not (tmp_path / "logbook" / "20260706.jsonl").exists()
+    assert store2.read().last_seal is None
+
+
 # --- Run reale ---------------------------------------------------------------
 
 def test_run_esegue_e_persiste(tmp_path, rotta, now_in_window, fx_one):

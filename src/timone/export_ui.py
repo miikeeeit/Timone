@@ -316,8 +316,26 @@ def build_ui_json(settings: Settings) -> Path:
     out.write_text(
         json.dumps(ui, indent=2, ensure_ascii=False), encoding="utf-8"
     )
+    _publish_remote(settings, ui)
     _refresh_symbols(settings, data_dir)
     return out
+
+
+def _publish_remote(settings: Settings, ui: dict) -> None:
+    """Pubblica la Bussola su Firestore (la legge solo l'utente autenticato).
+
+    Best-effort: se il ponte è spento o irraggiungibile, il file locale resta
+    comunque aggiornato — e non esce dal Mac.
+    """
+    import sys
+
+    try:
+        from .remote import publish_ui
+
+        if publish_ui(settings, ui):
+            print("Bussola pubblicata su Firestore (accesso riservato).")
+    except Exception as exc:  # noqa: BLE001 - mai bloccare l'export
+        print(f"(pubblicazione Firestore non riuscita: {exc})", file=sys.stderr)
 
 
 def _refresh_symbols(settings: Settings, data_dir: Path) -> None:

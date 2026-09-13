@@ -104,7 +104,7 @@ try{
     appId: "1:946988635365:web:5ba7eeeb6326f74a30300c",
   });
   AUTH = firebase.auth();
-  AUTH.onAuthStateChanged(u => { USER = u; state.authBusy = false; render(); });
+  AUTH.onAuthStateChanged(u => { USER = u; state.authBusy = false; render(); if(u) caricaDati(); });
   try{ DB = firebase.firestore(); }catch(e){ DB = null; }
 }catch(e){ AUTH = null; }
 
@@ -168,11 +168,24 @@ function applyLive(j){
     }));
   }
 }
-(async()=>{
-  for(const u of ['../data/ui.json','/data/ui.json','data/ui.json']){
-    try{ const r = await fetch(u, {cache:'no-store'}); if(r.ok){ applyLive(await r.json()); render(); return; } }catch(e){}
+/* I dati NON sono più un file statico pubblicato: un file su Hosting è
+   leggibile da chiunque conosca l'URL (il login qui è un gate JavaScript, non
+   protegge i file). Ora vivono su Firestore, dove le regole li lasciano leggere
+   SOLO al proprietario autenticato. Il file locale resta come ripiego per lo
+   sviluppo sul server locale, dove non c'è autenticazione. */
+async function caricaDati(){
+  if(DB && USER){
+    try{
+      const snap = await DB.collection('timone').doc('ui').get();
+      if(snap.exists){ applyLive(snap.data()); render(); return true; }
+    }catch(e){}
   }
-})();
+  for(const u of ['../data/ui.json','/data/ui.json','data/ui.json']){
+    try{ const r = await fetch(u, {cache:'no-store'}); if(r.ok){ applyLive(await r.json()); render(); return true; } }catch(e){}
+  }
+  return false;
+}
+caricaDati();
 const initialState = () => ({
   fase:'varo', override:false, varoStep:1, chiaveApi:'', chiaveSegreta:'', notaVaro:'', varando:false, postVaro:false,
   varoTargets:[{t:'',p:''},{t:'',p:''}], varoImporto:'100', varoSoglia:'5',
@@ -791,6 +804,10 @@ function appScreen(d){
     : 'Àncora calata da sola · dati broker incoerenti · oggi 16:02';
   const banner = d.ancoraGiu ? `<div style="background:var(--inksurf);color:#F5F2EC;padding:10px 20px;font:500 12px 'Space Grotesk',sans-serif;flex-shrink:0;margin-top:6px;display:flex;align-items:center;gap:10px;">${ANCHOR_SMALL(anim.ancora)}<span>${bannerTxt}</span></div>` : '';
   if(d.ancoraGiu) anim.ancora=false;
+  // Autenticati ma senza dati reali: senza questo avviso la console
+  // mostrerebbe i numeri d'esempio del design come se fossero il tuo
+  // portafoglio — lo stesso errore che abbiamo eliminato altrove.
+  const bannerDati = (USER && !LIVE) ? `<div style="background:#A98343;color:#F5F2EC;padding:10px 20px;font:500 12px 'Space Grotesk',sans-serif;line-height:1.45;">Dati non caricati: la console sta mostrando valori d'esempio, non il tuo portafoglio.</div>` : '';
 
   let tab='';
   if(s.tab==='bussola') tab=bussolaTab(d);
@@ -802,7 +819,7 @@ function appScreen(d){
 
   const bottomNav = !d.isDesktop ? `<div style="display:flex;border-top:1px solid var(--line);background:var(--paper);padding:10px 0 16px 0;flex-shrink:0;"><div data-action="goBussola" style="${navStyle(s.tab==='bussola')}">Bussola</div><div data-action="goGiornale" style="${navStyle(s.tab==='giornale')}">Giornale</div><div data-action="goRotta" style="${navStyle(s.tab==='rotta')}">Rotta</div><div data-action="goSicurezza" style="${navStyle(s.tab==='sicurezza')}">Sicurezza</div></div>` : '';
 
-  return `<div style="display:flex;flex-direction:row;height:100%;animation:fadeIn .35s ease;">${rail}<div style="display:flex;flex-direction:column;height:100%;flex:1;min-width:0;">${header}${banner}<div style="flex:1;min-height:0;display:flex;flex-direction:column;">${tab}</div>${bottomNav}</div></div>`;
+  return `<div style="display:flex;flex-direction:row;height:100%;animation:fadeIn .35s ease;">${rail}<div style="display:flex;flex-direction:column;height:100%;flex:1;min-width:0;">${header}${banner}${bannerDati}<div style="flex:1;min-height:0;display:flex;flex-direction:column;">${tab}</div>${bottomNav}</div></div>`;
 }
 
 /* ---------------- overlays ---------------- */

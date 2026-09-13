@@ -8,9 +8,10 @@ from timone.state import JsonStateStore
 
 
 class FakeRemote(remote.RemoteStore):
-    def __init__(self, cmd):
+    def __init__(self, cmd=None):
         self.cmd = cmd
         self.confermato = None
+        self.pubblicato = None
 
     def get_comando_ancora(self):
         return self.cmd
@@ -20,6 +21,9 @@ class FakeRemote(remote.RemoteStore):
         if self.cmd is not None:
             self.cmd["applicato_il"] = applicato_il
             self.cmd["stato_motore"] = stato_motore
+
+    def publish_ui(self, payload):
+        self.pubblicato = payload
 
 
 def _settings(tmp_path: Path, sa: str | None = None) -> Settings:
@@ -86,3 +90,17 @@ def test_azione_non_valida_ignorata(tmp_path):
 def test_nessun_comando(tmp_path):
     store = _store(tmp_path)
     assert remote.sync_ancora(_settings(tmp_path), store, remote=FakeRemote(None)) is None
+
+
+# --- pubblicazione protetta della Bussola -------------------------------------
+
+def test_publish_ui_manda_il_payload_al_remoto(tmp_path):
+    fake = FakeRemote()
+    payload = {"valore_eur": 504.17, "posizioni": [{"ticker": "NVDA"}]}
+    assert remote.publish_ui(_settings(tmp_path), payload, remote=fake) is True
+    assert fake.pubblicato == payload
+
+
+def test_publish_ui_no_op_senza_service_account(tmp_path):
+    """Ponte spento: nessuna pubblicazione, i dati restano solo sul Mac."""
+    assert remote.publish_ui(_settings(tmp_path), {"x": 1}) is False

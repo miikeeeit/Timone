@@ -1,4 +1,7 @@
-"""Ponte con la PWA — solo per l'Àncora azionabile da mobile.
+"""Ponte con la PWA, via Firestore.
+
+Due usi: l'Àncora azionabile da mobile e la pubblicazione protetta dei dati
+che la console web legge (prima erano un file statico pubblico su Hosting).
 
 La console web (autenticata) scrive un *intento* su Firestore; il motore, a
 inizio run e heartbeat, lo legge e lo applica con `set_anchor()`. Il motore
@@ -29,6 +32,7 @@ from .config import Settings
 
 _COLLECTION = "timone"
 _DOC = "ancora"
+_UI_DOC = "ui"
 
 
 class RemoteStore(ABC):
@@ -38,9 +42,16 @@ class RemoteStore(ABC):
     @abstractmethod
     def conferma_ancora(self, applicato_il: str, stato_motore: str) -> None: ...
 
+    def publish_ui(self, payload: dict) -> None:  # pragma: no cover - interfaccia
+        raise NotImplementedError
+
+    def get_ui_generated_at(self) -> str | None:  # pragma: no cover - interfaccia
+        raise NotImplementedError
+
 
 class _FirestoreStore(RemoteStore):
     def __init__(self, db):
+        self._db = db
         self._ref = db.collection(_COLLECTION).document(_DOC)
 
     def get_comando_ancora(self) -> dict | None:
@@ -52,6 +63,15 @@ class _FirestoreStore(RemoteStore):
             {"applicato_il": applicato_il, "stato_motore": stato_motore},
             merge=True,
         )
+
+    def publish_ui(self, payload: dict) -> None:
+        self._db.collection(_COLLECTION).document(_UI_DOC).set(payload)
+
+    def get_ui_generated_at(self) -> str | None:
+        snap = self._db.collection(_COLLECTION).document(_UI_DOC).get()
+        if not snap.exists:
+            return None
+        return (snap.to_dict() or {}).get("generated_at")
 
 
 def firestore_store(settings: Settings) -> RemoteStore | None:
@@ -69,6 +89,26 @@ def firestore_store(settings: Settings) -> RemoteStore | None:
             credentials.Certificate(str(Path(path).expanduser()))
         )
     return _FirestoreStore(firestore.client())
+
+
+def publish_ui(
+    settings: Settings, payload: dict, *, remote: RemoteStore | None = None
+) -> bool:
+    """Pubblica i dati della Bussola su Firestore, protetti dalle regole.
+
+    Sostituisce la pubblicazione di `data/ui.json` come file statico su Hosting,
+    che era leggibile da CHIUNQUE conoscesse l'URL: il login della PWA è un gate
+    JavaScript, non protegge i file. Su Firestore invece le regole lasciano
+    leggere solo il proprietario autenticato.
+
+    Ritorna True se pubblicato, False se il ponte è spento (nessun service
+    account): in quel caso resta solo il file locale, che non esce dal Mac.
+    """
+    remote = remote if remote is not None else firestore_store(settings)
+    if remote is None:
+        return False
+    remote.publish_ui(payload)
+    return True
 
 
 def sync_ancora(
