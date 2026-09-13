@@ -4,7 +4,7 @@
 
 **Stato del progetto:** prototipo funzionante, in **paper trading** (denaro simulato) su [Alpaca](https://alpaca.markets). Sviluppato come base che può evolvere verso un prodotto reale; la roadmap verso la gestione di capitale vero è esplicita e vincolata a criteri di affidabilità (vedi *Prossimi passi*).
 
-- **Cosa funziona oggi:** motore di calcolo ordini (DCA + ribilanciamento a soglie), guardrail di sicurezza nel codice, esecuzione via API Alpaca, giornale di bordo con catena hash verificabile, log fiscale italiano (LIFO + cambio BCE), sicurezza attiva (kill switch automatico), versionamento della strategia con quarantena, diagnostica di sistema (`timone doctor`), diario settimanale in linguaggio naturale, CLI completa, console web di sola lettura con Àncora azionabile da mobile. 140 test automatici.
+- **Cosa funziona oggi:** motore di calcolo ordini (DCA + ribilanciamento a soglie), guardrail di sicurezza nel codice, esecuzione via API Alpaca, giornale di bordo con catena hash verificabile, log fiscale italiano (LIFO + cambio BCE), sicurezza attiva (kill switch automatico), versionamento della strategia con quarantena, diagnostica di sistema (`timone doctor`), diario settimanale in linguaggio naturale, CLI completa, console web di sola lettura con Àncora azionabile da mobile. 143 test automatici.
 - **Cosa manca / è in corso:** notifiche push su mobile. Nessun percorso verso il trading *live*: l'endpoint reale è bloccato nel codice.
 
 ---
@@ -83,7 +83,7 @@ Questa è la sezione che spiega *come ragiono*: le scelte non ovvie, e cosa ho s
 
 - **Guardrail nel codice, non nella configurazione.** Importo massimo per ordine, budget giornaliero, whitelist dei ticker, finestra oraria, tetto agli ordini per run: sono costanti nel motore, verificate prima di ogni ordine. Renderli più permissivi richiede un periodo di attesa di 72 ore e una doppia conferma; restringerli è immediato. Il tempo è parte della protezione.
 - **Solo paper trading, per costruzione.** L'endpoint reale di Alpaca è rifiutato dal codice: nessun percorso verso denaro vero, nemmeno per errore di configurazione.
-- **Rischio di cambio tracciato a parte.** Con titoli quotati in USD, il rendimento in euro è due storie distinte — i titoli e il cambio EUR/USD — e il sistema le tiene separate invece di confonderle in un unico numero.
+- **Rischio di cambio tracciato a parte.** Con titoli quotati in USD, il rendimento in euro è due storie distinte — i titoli e il cambio EUR/USD — e il sistema le tiene separate invece di confonderle in un unico numero. Vale anche per la sicurezza: l'Àncora automatica misura il drawdown **sui soli titoli**, perché un calo dovuto al cambio non è un motivo per smettere di comprare — anzi, con l'euro più forte ogni versamento compra più dollari.
 - **Vendere è sempre un gesto manuale.** L'unica azione che il motore compie da solo è *fermarsi* (calare l'Àncora); comprare è schedulato, vendere è deciso dall'utente — **ribilanciamento incluso**: la strategia emette solo ordini di acquisto, per costruzione. Le soglie di uscita, quando impostate, **avvisano soltanto**.
 - **Il backtest verifica il comportamento, non insegue il rendimento.** Cercare i parametri "migliori" su un passato noto produce numeri lusinghieri e nessuna garanzia. `timone backtest` risponde ad altre domande: quante operazioni avrebbe fatto il motore, quali guardrail sarebbero scattati, e soprattutto **se l'Àncora automatica sarebbe calata** — e in quel caso la simulazione si ferma lì, dove si sarebbe fermato il motore vero. Riusa le stesse funzioni del motore, non una copia: è possibile perché la strategia è pura e deterministica.
 - **Tracciabilità a prova di manomissione.** Ogni run è sigillato in una catena hash (SHA-256 concatenato): lo storico è verificabile e una modifica retroattiva spezza la catena.
@@ -96,7 +96,7 @@ Questa è la sezione che spiega *come ragiono*: le scelte non ovvie, e cosa ho s
 - **[alpaca-py](https://github.com/alpacahq/alpaca-py)** — API broker (dati e ordini, solo paper)
 - **PyYAML** — configurazione della strategia
 - **python-dotenv** — gestione delle credenziali via variabili d'ambiente
-- **pytest** — 140 test automatici (guardrail, calcolo ordini, LIFO fiscale, sicurezza attiva, motore, diagnostica, resilienza di rete)
+- **pytest** — 143 test automatici (guardrail, calcolo ordini, LIFO fiscale, sicurezza attiva, motore, diagnostica, resilienza di rete)
 - **HTML/CSS/JS vanilla** + **Firebase Hosting/Auth** — interfaccia web di sola lettura (PWA)
 - Fonte cambio: **BCE** via [frankfurter.app](https://frankfurter.app)
 

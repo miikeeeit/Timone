@@ -138,3 +138,31 @@ def test_drawdown_entro_soglia_non_scatta():
     s = lots_state(qty=1.0, cost=100.0)
     pos = {"AAA": position("AAA", 95.0, 95.0)}  # -5%
     assert safety.check_drawdown(s, pos, fx(), "d") is None
+
+
+def test_perdita_solo_di_cambio_non_cala_l_ancora():
+    """Titoli fermi, euro che si rafforza del 33%: in euro il calo supera la
+    soglia, ma non è un motivo per smettere di comprare — anzi, ogni versamento
+    ora compra più dollari. L'Àncora non deve scattare."""
+    s = lots_state(qty=1.0, cost=100.0)          # costo 100 USD / 100 EUR
+    pos = {"AAA": position("AAA", 100.0, 100.0)}  # titoli invariati
+    cambio = FxRate(date="2026-07-06", eur_usd=1.33, estimated=False, source="t")
+    assert safety.check_drawdown(s, pos, cambio, "d") is None
+    assert s.anchor_down is False
+
+
+def test_drawdown_titoli_scatta_anche_con_cambio_favorevole():
+    """Il contrario: i titoli crollano ma il dollaro si rafforza, mascherando
+    la perdita in euro. L'Àncora deve scattare lo stesso."""
+    s = lots_state(qty=1.0, cost=100.0)
+    pos = {"AAA": position("AAA", 75.0, 75.0)}    # −25% sui titoli
+    cambio = FxRate(date="2026-07-06", eur_usd=0.8, estimated=False, source="t")
+    reason = safety.check_drawdown(s, pos, cambio, "d")
+    assert reason is not None and s.anchor_down is True
+
+
+def test_il_motivo_riporta_titoli_e_totale_in_euro():
+    s = lots_state(qty=1.0, cost=100.0)
+    pos = {"AAA": position("AAA", 70.0, 70.0)}
+    reason = safety.check_drawdown(s, pos, fx(), "d")
+    assert "titoli" in reason and "USD" in reason and "euro" in reason

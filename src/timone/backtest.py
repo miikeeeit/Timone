@@ -127,8 +127,11 @@ def simula(
             quote[t] * prezzi[t] for t in rotta.tickers if t in prezzi
         )
         valore_eur = valore_usd / g.eur_usd
-        if r.versato_eur > 0:
-            dd = (r.versato_eur - valore_eur) / r.versato_eur
+        # Stessa formula della sicurezza attiva: drawdown dei SOLI titoli, in
+        # USD. Se qui usassimo gli euro, simuleremmo un motore diverso da quello
+        # vero — e il backtest mentirebbe proprio sulla cosa che deve verificare.
+        if costo_usd > 0:
+            dd = (costo_usd - valore_usd) / costo_usd
             if dd > r.max_drawdown:
                 r.max_drawdown = dd
                 r.max_drawdown_il = g.data
