@@ -4,8 +4,8 @@
 
 **Stato del progetto:** prototipo funzionante, in **paper trading** (denaro simulato) su [Alpaca](https://alpaca.markets). Sviluppato come base che può evolvere verso un prodotto reale; la roadmap verso la gestione di capitale vero è esplicita e vincolata a criteri di affidabilità (vedi *Prossimi passi*).
 
-- **Cosa funziona oggi:** motore di calcolo ordini (DCA + ribilanciamento a soglie), guardrail di sicurezza nel codice, esecuzione via API Alpaca, giornale di bordo con catena hash verificabile, log fiscale italiano (LIFO + cambio BCE), sicurezza attiva (kill switch automatico), versionamento della strategia con quarantena, diagnostica di sistema (`timone doctor`), diario settimanale in linguaggio naturale, CLI completa, console web di sola lettura con Àncora azionabile da mobile. 131 test automatici.
-- **Cosa manca / è in corso:** notifiche push su mobile, riconciliazione automatica degli ordini non riempiti, backtest storico. Nessun percorso verso il trading *live*: l'endpoint reale è bloccato nel codice.
+- **Cosa funziona oggi:** motore di calcolo ordini (DCA + ribilanciamento a soglie), guardrail di sicurezza nel codice, esecuzione via API Alpaca, giornale di bordo con catena hash verificabile, log fiscale italiano (LIFO + cambio BCE), sicurezza attiva (kill switch automatico), versionamento della strategia con quarantena, diagnostica di sistema (`timone doctor`), diario settimanale in linguaggio naturale, CLI completa, console web di sola lettura con Àncora azionabile da mobile. 140 test automatici.
+- **Cosa manca / è in corso:** notifiche push su mobile. Nessun percorso verso il trading *live*: l'endpoint reale è bloccato nel codice.
 
 ---
 
@@ -85,6 +85,7 @@ Questa è la sezione che spiega *come ragiono*: le scelte non ovvie, e cosa ho s
 - **Solo paper trading, per costruzione.** L'endpoint reale di Alpaca è rifiutato dal codice: nessun percorso verso denaro vero, nemmeno per errore di configurazione.
 - **Rischio di cambio tracciato a parte.** Con titoli quotati in USD, il rendimento in euro è due storie distinte — i titoli e il cambio EUR/USD — e il sistema le tiene separate invece di confonderle in un unico numero.
 - **Vendere è sempre un gesto manuale.** L'unica azione che il motore compie da solo è *fermarsi* (calare l'Àncora); comprare è schedulato, vendere è deciso dall'utente — **ribilanciamento incluso**: la strategia emette solo ordini di acquisto, per costruzione. Le soglie di uscita, quando impostate, **avvisano soltanto**.
+- **Il backtest verifica il comportamento, non insegue il rendimento.** Cercare i parametri "migliori" su un passato noto produce numeri lusinghieri e nessuna garanzia. `timone backtest` risponde ad altre domande: quante operazioni avrebbe fatto il motore, quali guardrail sarebbero scattati, e soprattutto **se l'Àncora automatica sarebbe calata** — e in quel caso la simulazione si ferma lì, dove si sarebbe fermato il motore vero. Riusa le stesse funzioni del motore, non una copia: è possibile perché la strategia è pura e deterministica.
 - **Tracciabilità a prova di manomissione.** Ogni run è sigillato in una catena hash (SHA-256 concatenato): lo storico è verificabile e una modifica retroattiva spezza la catena.
 
 ---
@@ -95,7 +96,7 @@ Questa è la sezione che spiega *come ragiono*: le scelte non ovvie, e cosa ho s
 - **[alpaca-py](https://github.com/alpacahq/alpaca-py)** — API broker (dati e ordini, solo paper)
 - **PyYAML** — configurazione della strategia
 - **python-dotenv** — gestione delle credenziali via variabili d'ambiente
-- **pytest** — 131 test automatici (guardrail, calcolo ordini, LIFO fiscale, sicurezza attiva, motore, diagnostica, resilienza di rete)
+- **pytest** — 140 test automatici (guardrail, calcolo ordini, LIFO fiscale, sicurezza attiva, motore, diagnostica, resilienza di rete)
 - **HTML/CSS/JS vanilla** + **Firebase Hosting/Auth** — interfaccia web di sola lettura (PWA)
 - Fonte cambio: **BCE** via [frankfurter.app](https://frankfurter.app)
 
@@ -137,6 +138,9 @@ timone fiscale     riepilogo annuale (LIFO, 26%) + simulatore
 timone rotta       versioni della strategia e quarantena delle modifiche
 timone limiti      limiti effettivi e richiesta di allargamento (72h)
 timone approdo     anteprima vendita e soglie di rientro (solo avviso)
+timone narratore   diario settimanale di cosa ha fatto il motore
+timone doctor      controlli di salute del sistema
+timone backtest    riesegue la strategia sulla storia (--da / --a)
 timone ancora --drop / --raise    kill switch manuale
 ```
 
@@ -156,9 +160,9 @@ L'esecuzione è pensata per essere schedulata (es. `cron`, un run al giorno nei 
 - [x] Àncora azionabile da mobile: la console invia l'intento, il motore resta l'unico che lo applica
 - [x] Resilienza di rete: un blip di connettività non fa fallire il run né calare l'Àncora
 - [x] Report settimanale in linguaggio naturale che *spiega* le operazioni (senza mai deciderle)
+- [x] Riconciliazione degli ordini non riempiti nei run successivi
+- [x] Backtest storico che verifica il *comportamento* (guardrail scattati, Àncora calata), non il rendimento
 - [ ] Notifiche push su mobile (avvisi di eccezione anche ad app chiusa)
-- [ ] Riconciliazione automatica degli ordini non riempiti entro il polling
-- [ ] Backtest storico della strategia
 - [ ] Valutazione del passaggio a capitale reale — **solo** dopo un periodo prolungato di paper trading pulito (zero violazioni dei guardrail, catena integra, log fiscale completo). Decisione esplicita, mai automatica.
 
 ---

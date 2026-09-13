@@ -183,6 +183,73 @@ def cmd_doctor(settings, args) -> int:
     return 1 if s["stato"] == ERR else 0
 
 
+def cmd_backtest(settings, args) -> int:
+    """Riesegue la strategia sulla storia per verificarne il COMPORTAMENTO.
+
+    Non serve a cercare i parametri migliori: ottimizzare su un passato noto
+    produce numeri lusinghieri e nessuna garanzia. Serve a sapere quante
+    operazioni avrebbe fatto il motore, quali guardrail sarebbero scattati e se
+    l'Àncora automatica sarebbe calata.
+    """
+    from .backtest import carica_giorni, simula
+    from .models import Rotta, Target
+
+    store = _state_store(settings)
+    base = _active_rotta(settings, store)
+    rotta = Rotta(
+        amount_per_run_eur=float(args.importo or base.amount_per_run_eur),
+        rebalance_threshold_pct=float(args.soglia or base.rebalance_threshold_pct),
+        targets=tuple(Target(t.ticker, t.weight_pct) for t in base.targets),
+    )
+
+    print(f"Backtest {args.da} → {args.a}")
+    print(
+        f"Rotta: {' · '.join(f'{t.ticker} {t.weight_pct:g}%' for t in rotta.targets)}"
+        f" · {rotta.amount_per_run_eur:g} €/giorno · soglia "
+        f"{rotta.rebalance_threshold_pct:g} pp"
+    )
+    giorni = carica_giorni(settings, rotta, args.da, args.a)
+    if not giorni:
+        print("Nessun dato di mercato nel periodo richiesto.", file=sys.stderr)
+        return 1
+
+    r = simula(rotta, giorni, ferma_su_ancora=not args.ignora_ancora)
+    print(f"\nGiorni simulati: {r.giorni} · ordini eseguiti: {r.ordini_eseguiti}")
+    if r.ordini_scartati:
+        for regola, n in sorted(r.ordini_scartati.items()):
+            print(f"  guardrail '{regola}' ha fermato {n} ordini")
+    else:
+        print("  nessun ordine fermato dai guardrail")
+
+    print(f"\nVersato:        {r.versato_eur:>10.2f} EUR")
+    print(f"Valore finale:  {r.valore_finale_eur:>10.2f} EUR")
+    print(f"Risultato:      {r.pnl_eur:>+10.2f} EUR")
+    print(f"  di cui titoli {r.pnl_titoli_eur:>+10.2f} EUR")
+    print(f"  di cui cambio {r.pnl_cambio_eur:>+10.2f} EUR")
+    if r.quote:
+        print("\nQuote accumulate: " + " · ".join(
+            f"{t} {q:.6f}" for t, q in sorted(r.quote.items())
+        ))
+
+    print(f"\nDrawdown massimo: {r.max_drawdown * 100:.1f}%"
+          + (f" (il {r.max_drawdown_il})" if r.max_drawdown_il else ""))
+    if r.ancora_il:
+        print(f"⚠  L'Àncora automatica sarebbe calata il {r.ancora_il}: "
+              "il motore si sarebbe fermato da solo.")
+        if args.ignora_ancora:
+            print("   (--ignora-ancora: la simulazione è proseguita comunque, "
+                  "quindi i numeri qui sopra sono ipotetici)")
+        else:
+            print("   La simulazione si ferma lì, come si sarebbe fermato il "
+                  "motore. Per lo scenario ipotetico: --ignora-ancora")
+    else:
+        print("   L'Àncora automatica non sarebbe mai scattata.")
+    print("\nÈ una simulazione: esecuzione al prezzo di chiusura, nessuno "
+          "slippage, nessuna commissione, nessun dividendo.\n"
+          "Il passato non promette nulla sul futuro.")
+    return 0
+
+
 def cmd_narratore(settings, args) -> int:
     """Il diario settimanale in linguaggio naturale: racconta cosa ha fatto il
     motore, senza mai suggerire cosa fare."""
@@ -556,6 +623,14 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("verifica", help="riverifica la catena hash del Giornale")
     sub.add_parser("doctor", help="controlli di salute del sistema (diagnostica)")
     sub.add_parser("narratore", help="diario settimanale in linguaggio naturale")
+
+    p_bt = sub.add_parser("backtest", help="riesegue la strategia sulla storia")
+    p_bt.add_argument("--da", required=True, metavar="AAAA-MM-GG", help="data iniziale")
+    p_bt.add_argument("--a", required=True, metavar="AAAA-MM-GG", help="data finale")
+    p_bt.add_argument("--importo", type=float, help="importo per run (default: quello della Rotta)")
+    p_bt.add_argument("--soglia", type=float, help="soglia di ribilanciamento in pp (default: quella della Rotta)")
+    p_bt.add_argument("--ignora-ancora", dest="ignora_ancora", action="store_true",
+                      help="prosegui anche dopo il punto in cui l'Àncora sarebbe calata (scenario ipotetico)")
     sub.add_parser("heartbeat", help="controlla che il run di oggi sia avvenuto")
     sub.add_parser("fiscale", help="riepilogo fiscale annuale + simulatore")
     sub.add_parser("export-ui", help="esporta i dati reali per la Bussola (ui.json)")
@@ -609,6 +684,7 @@ _DISPATCH = {
     "verifica": cmd_verifica,
     "doctor": cmd_doctor,
     "narratore": cmd_narratore,
+    "backtest": cmd_backtest,
     "heartbeat": cmd_heartbeat,
     "fiscale": cmd_fiscale,
     "export-ui": cmd_export_ui,
