@@ -4,8 +4,8 @@
 
 **Stato del progetto:** prototipo funzionante, in **paper trading** (denaro simulato) su [Alpaca](https://alpaca.markets). Sviluppato come base che può evolvere verso un prodotto reale; la roadmap verso la gestione di capitale vero è esplicita e vincolata a criteri di affidabilità (vedi *Prossimi passi*).
 
-- **Cosa funziona oggi:** motore di calcolo ordini (DCA + ribilanciamento a soglie), guardrail di sicurezza nel codice, esecuzione via API Alpaca, giornale di bordo con catena hash verificabile, log fiscale italiano (LIFO + cambio BCE), sicurezza attiva (kill switch automatico), versionamento della strategia con quarantena, CLI completa, interfaccia web di sola lettura. 105 test automatici.
-- **Cosa manca / è in corso:** notifiche push su mobile, riconciliazione automatica degli ordini non riempiti, backtest storico, report settimanale in linguaggio naturale. Nessun percorso verso il trading *live*: l'endpoint reale è bloccato nel codice.
+- **Cosa funziona oggi:** motore di calcolo ordini (DCA + ribilanciamento a soglie), guardrail di sicurezza nel codice, esecuzione via API Alpaca, giornale di bordo con catena hash verificabile, log fiscale italiano (LIFO + cambio BCE), sicurezza attiva (kill switch automatico), versionamento della strategia con quarantena, diagnostica di sistema (`timone doctor`), diario settimanale in linguaggio naturale, CLI completa, console web di sola lettura con Àncora azionabile da mobile. 131 test automatici.
+- **Cosa manca / è in corso:** notifiche push su mobile, riconciliazione automatica degli ordini non riempiti, backtest storico. Nessun percorso verso il trading *live*: l'endpoint reale è bloccato nel codice.
 
 ---
 
@@ -25,7 +25,7 @@ Ad ogni esecuzione schedulata (una al giorno, nei giorni di mercato aperto):
 2. **Verifica il contesto:** mercato aperto (calendario Alpaca) e finestra oraria consentita.
 3. **Legge la Rotta:** la strategia versionata (ticker, pesi target, importo per run, soglia di ribilanciamento).
 4. **Scarica posizioni e prezzi** dal broker e calcola il cambio EUR/USD del giorno (fonte BCE).
-5. **Calcola gli ordini** in modo deterministico: distribuisce il versamento sui titoli sottopesati; se un peso è uscito dalla banda di soglia, genera ordini di ribilanciamento.
+5. **Calcola gli ordini** in modo deterministico: distribuisce il versamento sui titoli sottopesati. **Solo acquisti**: se un peso è uscito dalla banda, il motore smette di alimentarlo e lo segnala, ma non vende mai per ribilanciare.
 6. **Fa passare ogni ordine dai guardrail.** Un ordine che viola un limite non viene "aggiustato": viene scartato e loggato con la regola violata.
 7. **Esegue gli ordini approvati** con un identificativo deterministico (idempotenza: rieseguire non duplica), verifica il fill, aggiorna lo stato.
 8. **Scrive il Giornale di bordo** (registro strutturato per ogni run) e il **log fiscale**, e sigilla il run nella catena hash.
@@ -95,7 +95,7 @@ Questa è la sezione che spiega *come ragiono*: le scelte non ovvie, e cosa ho s
 - **[alpaca-py](https://github.com/alpacahq/alpaca-py)** — API broker (dati e ordini, solo paper)
 - **PyYAML** — configurazione della strategia
 - **python-dotenv** — gestione delle credenziali via variabili d'ambiente
-- **pytest** — 105 test automatici (guardrail, calcolo ordini, LIFO fiscale, sicurezza attiva, motore, diagnostica)
+- **pytest** — 131 test automatici (guardrail, calcolo ordini, LIFO fiscale, sicurezza attiva, motore, diagnostica, resilienza di rete)
 - **HTML/CSS/JS vanilla** + **Firebase Hosting/Auth** — interfaccia web di sola lettura (PWA)
 - Fonte cambio: **BCE** via [frankfurter.app](https://frankfurter.app)
 
@@ -151,11 +151,14 @@ L'esecuzione è pensata per essere schedulata (es. `cron`, un run al giorno nei 
 - [x] Giornale di bordo con catena hash verificabile
 - [x] Log fiscale italiano (LIFO, cambio BCE, scomposizione del rischio di cambio)
 - [x] Strategia versionata con quarantena e cooling-off sui limiti
-- [x] Interfaccia web di sola lettura (PWA) con accesso protetto
+- [x] Interfaccia web di sola lettura (PWA) con accesso protetto (i dati stanno dietro autenticazione, non su file pubblici)
+- [x] Diagnostica di sistema `timone doctor` (endpoint, chiavi, cambio, scheduler, dati, catena, pubblicazione, Àncora)
+- [x] Àncora azionabile da mobile: la console invia l'intento, il motore resta l'unico che lo applica
+- [x] Resilienza di rete: un blip di connettività non fa fallire il run né calare l'Àncora
+- [x] Report settimanale in linguaggio naturale che *spiega* le operazioni (senza mai deciderle)
 - [ ] Notifiche push su mobile (avvisi di eccezione anche ad app chiusa)
 - [ ] Riconciliazione automatica degli ordini non riempiti entro il polling
 - [ ] Backtest storico della strategia
-- [ ] Report settimanale in linguaggio naturale che *spiega* le operazioni (senza mai deciderle)
 - [ ] Valutazione del passaggio a capitale reale — **solo** dopo un periodo prolungato di paper trading pulito (zero violazioni dei guardrail, catena integra, log fiscale completo). Decisione esplicita, mai automatica.
 
 ---
