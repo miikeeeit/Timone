@@ -198,6 +198,27 @@ def _battito_block(state) -> dict:
     return {"ultimo": _label(last["run_id"], last.get("ts")), "atteso": atteso, "stato": stato}
 
 
+def _fiscale_righe(data_dir: Path, anno: int) -> list[dict]:
+    """Righe del log fiscale dell'anno, per l'export dalla console.
+
+    Senza queste il pulsante "Esporta il report" poteva solo fingere: ora la
+    console ha i dati veri e genera un CSV identico al registro del motore.
+    """
+    f = data_dir / "fiscale.csv"
+    if not f.exists():
+        return []
+    import csv
+
+    righe: list[dict] = []
+    with f.open("r", encoding="utf-8", newline="") as fh:
+        for r in csv.DictReader(fh):
+            data = (r.get("data") or "").strip()
+            if data == "data" or not data.startswith(str(anno)):
+                continue  # salta intestazioni ripetute e altri anni
+            righe.append(r)
+    return righe
+
+
 def _doctor_block(settings: Settings) -> dict:
     """Esegue i controlli di `timone doctor` e li impacchetta per la Bussola."""
     from .doctor import run_checks, summarize
@@ -298,6 +319,7 @@ def build_ui_json(settings: Settings) -> Path:
         "catena": {"integra": ok, "sigilli": n_sigilli, "msg": msg},
         "last_seal": state.last_seal,
         "last_run": state.last_run,
+        "fiscale_righe": _fiscale_righe(data_dir, datetime.now().year),
         "fiscale": {
             **fisc,
             "latente_eur": round(latente, 2),

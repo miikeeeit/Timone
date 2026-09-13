@@ -136,6 +136,17 @@ class Engine:
         # --- Posizioni correnti -> valori EUR ---
         positions = self.broker.get_positions()
 
+        # --- Riconciliazione: prima della sicurezza attiva, non dopo ---
+        # L'ordine conta: se i lotti non fossero allineati, sarebbe proprio il
+        # controllo di coerenza a calare l'Àncora per un problema inesistente.
+        if not dry_run:
+            recuperati = self._riconcilia_pendenti(state, logbook, date_iso)
+            if recuperati:
+                report.notes.append(
+                    f"Riconciliati {len(recuperati)} ordini rimasti in sospeso "
+                    "in run precedenti."
+                )
+
         # --- Sicurezza attiva: l'àncora cala da sola, se serve ---
         if not dry_run:
             reason = safety.evaluate(state, positions, fx, run_id, date_iso)
@@ -245,6 +256,16 @@ class Engine:
                 pnl = fiscal.record(state=state, when=date_iso, fill=fill, fx=fx)
                 state.mark_order(cid, date_iso)
                 logbook.event("fiscale", ticker=fill.ticker, pnl_eur=round(pnl, 2))
+            elif fill.status == "pending":
+                # Non riempito entro il polling: lo si annota per riconciliarlo
+                # al prossimo run. Senza questo l'ordine sparirebbe dal registro
+                # interno pur esistendo dal broker.
+                state.add_pending(
+                    cid, ticker=fill.ticker, side=fill.side.value, data=date_iso
+                )
+                logbook.event(
+                    "ordine_pendente", ticker=fill.ticker, client_order_id=cid
+                )
 
         # --- Soglia di rientro (Approdo): SOLO avviso, mai vendita ---
         if not dry_run:
@@ -281,6 +302,65 @@ class Engine:
                 state.last_fx = {"date": date_iso, "eur_usd": fx.eur_usd}
             self._seal_and_save(logbook, state)
         return report
+
+    def _riconcilia_pendenti(self, state, logbook, date_iso: str) -> list:
+        """Recupera gli ordini rimasti 'pending' nei run precedenti.
+
+        Il `client_order_id` contiene la data del run: dal giorno dopo è un ID
+        diverso, quindi nessun run successivo ritroverebbe quell'ordine da solo.
+        Qui lo si interroga esplicitamente.
+
+        La contabilizzazione usa data e cambio del giorno dell'ORDINE, non di
+        oggi: il log fiscale deve restare fedele a quando è avvenuta l'operazione.
+        """
+        pendenti = dict(state.pending_orders or {})
+        if not pendenti:
+            return []
+        fiscal = FiscalLog(self.data_dir / "fiscale.csv")
+        recuperati = []
+        for cid, info in pendenti.items():
+            ticker = info.get("ticker")
+            try:
+                side = OrderSide(info.get("side"))
+            except ValueError:
+                state.remove_pending(cid)
+                continue
+            try:
+                fill = self.broker.get_fill(
+                    client_order_id=cid, ticker=ticker, side=side
+                )
+            except Exception as exc:  # noqa: BLE001 - non deve fermare il run
+                logbook.event(
+                    "riconciliazione_fallita",
+                    client_order_id=cid, messaggio=str(exc)[:200],
+                )
+                continue
+            if fill.status == "pending":
+                continue  # ancora aperto: si riprova al prossimo run
+            state.remove_pending(cid)
+            if not fill.is_filled:
+                logbook.event(
+                    "riconciliato", client_order_id=cid,
+                    ticker=ticker, stato=fill.status,
+                )
+                continue
+            if state.order_processed(cid):
+                continue
+            quando = info.get("data") or date_iso
+            fx = get_eur_usd(quando, state, fetcher=self.fx_fetcher)
+            if fill.side is OrderSide.BUY:
+                state.add_spend(
+                    quando,
+                    fx.usd_to_eur(fill.filled_qty * fill.filled_avg_price_usd),
+                )
+            pnl = fiscal.record(state=state, when=quando, fill=fill, fx=fx)
+            state.mark_order(cid, quando)
+            logbook.event(
+                "riconciliato", client_order_id=cid, ticker=ticker,
+                stato="filled", data=quando, pnl_eur=round(pnl, 2),
+            )
+            recuperati.append(fill)
+        return recuperati
 
     def _halt(
         self,

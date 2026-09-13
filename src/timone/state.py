@@ -60,6 +60,17 @@ class TimoneState:
     # Ordini già registrati (client_order_id -> data): un fill si contabilizza
     # UNA volta sola, anche se il run viene rieseguito nello stesso giorno.
     processed_orders: dict = field(default_factory=dict)
+    # Ordini inviati ma non ancora riempiti (client_order_id -> {ticker, side,
+    # data}). Senza questo un ordine riempito in ritardo non verrebbe MAI
+    # registrato: i lotti divergerebbero dal broker e la sicurezza attiva
+    # calerebbe l'Àncora per "dati incoerenti", puntando nella direzione sbagliata.
+    pending_orders: dict = field(default_factory=dict)
+
+    def add_pending(self, cid: str, *, ticker: str, side: str, data: str) -> None:
+        self.pending_orders[cid] = {"ticker": ticker, "side": side, "data": data}
+
+    def remove_pending(self, cid: str) -> None:
+        self.pending_orders.pop(cid, None)
 
     def order_processed(self, cid: str) -> bool:
         return cid in self.processed_orders
@@ -118,6 +129,7 @@ class TimoneState:
             soglia_approdo_eur=raw.get("soglia_approdo_eur"),
             soglia_notificata=bool(raw.get("soglia_notificata", False)),
             processed_orders=dict(raw.get("processed_orders") or {}),
+            pending_orders=dict(raw.get("pending_orders") or {}),
         )
 
 

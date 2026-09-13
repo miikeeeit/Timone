@@ -747,7 +747,7 @@ function fiscaleTab(d){
     const stimNote = F.cambi_stimati > 0
       ? `<div style="padding:12px 16px;border-top:1px dashed var(--brassText);background:rgba(201,163,94,0.07);display:flex;align-items:center;gap:10px;"><span style="width:7px;height:7px;border-radius:50%;background:#A98343;flex-shrink:0;"></span><span style="font:400 12px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.5;"><strong style="font-weight:600;color:var(--fg);">${F.cambi_stimati} operazioni su ${F.operazioni} usano un cambio stimato</strong> (fonte BCE non raggiungibile). Marcate nel report, riga per riga.</span></div>` : '';
     body = `<div style="background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;"><div style="padding:16px;display:flex;flex-direction:column;gap:2px;border-bottom:1px solid var(--line);"><div style="display:flex;justify-content:space-between;align-items:baseline;"><span style="font:600 14px 'Space Grotesk',sans-serif;">Report annuale · Italia</span><span style="font:500 11px 'JetBrains Mono',monospace;color:var(--muted);">anno ${LIVE?(LIVE.fiscale.anno||2026):2026} · ${F.operazioni} operazioni</span></div><span style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);">Metodo LIFO · controvalori EUR al cambio BCE del giorno di esecuzione</span></div><div style="padding:4px 16px;display:flex;flex-direction:column;">${drow('Plusvalenze realizzate',fmtN(F.plusvalenze_eur)+'&nbsp;€',1)}${drow('Minusvalenze realizzate',fmtN(F.minusvalenze_eur)+'&nbsp;€',1)}${drow('Imposta sostitutiva · 26&nbsp;%',fmtN(F.imposta_26_eur)+'&nbsp;€',1)}${drow('Quadri di riferimento','RT · RW',0)}</div>${stimNote}</div>
-      <button data-action="esportaFiscale" style="padding:14px;border:1.5px solid var(--action);background:transparent;color:var(--action);border-radius:12px;font:600 14px 'Space Grotesk',sans-serif;cursor:pointer;">Esporta il report · CSV + PDF</button>
+      <button data-action="esportaFiscale" style="padding:14px;border:1.5px solid var(--action);background:transparent;color:var(--action);border-radius:12px;font:600 14px 'Space Grotesk',sans-serif;cursor:pointer;">Esporta il report · CSV</button>
       <div style="display:flex;flex-direction:column;gap:8px;"><div style="font:600 11px 'Space Grotesk',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);">Se vendessi ora</div><div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 16px;display:flex;flex-direction:column;">${drow('Plusvalenza latente',fmtN(F.latente_eur)+'&nbsp;€',1)}${drow('Imposta stimata · 26&nbsp;%',fmtN(F.imposta_latente_eur)+'&nbsp;€',1)}<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;"><span style="font:500 13px 'Space Grotesk',sans-serif;">Netto in tasca</span><span style="font:600 15px 'JetBrains Mono',monospace;">${fmtN(F.netto_eur)}&nbsp;€</span></div></div><div style="font:400 11px 'Space Grotesk',sans-serif;color:var(--muted);line-height:1.5;">È un calcolo, non un invito a vendere. Timone non spinge mai ad agire.</div></div>`;
   }
   return `<div style="display:flex;flex-direction:column;height:100%;"><div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px 4px 20px;flex-shrink:0;"><div style="display:flex;align-items:center;gap:10px;"><span data-action="goBussola" style="font:500 13px 'Space Grotesk',sans-serif;color:var(--muted);cursor:pointer;">←</span><div style="font:700 18px 'Space Grotesk',sans-serif;">Fiscale</div></div><span style="font:500 11px 'JetBrains Mono',monospace;color:var(--muted);">anno 2026 · bozza</span></div><div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding:12px 20px 24px 20px;">${body}</div></div>`;
@@ -971,7 +971,25 @@ const actions = {
   apriCala(){ setState({sheet:'cala',notaCala:''}); },
   confermaCala(){ const nota=state.notaCala.trim(); inviaComandoAncora('cala', nota).then(ok=>{ if(ok){ setState({sheet:null,ancoraComando:'cala'}); showToast('Comando inviato — il motore cala l’àncora al prossimo run'); } }); },
   chiudiSheet(){ setState({sheet:null}); },
-  esportaFiscale(){ showToast('Report esportato — CSV e PDF, cambi stimati marcati riga per riga'); },
+  esportaFiscale(){
+    // Prima questo pulsante mostrava solo un messaggio di successo senza
+    // produrre nulla. Ora genera davvero il CSV dalle righe del registro.
+    const righe = (LIVE && Array.isArray(LIVE.fiscale_righe)) ? LIVE.fiscale_righe : [];
+    if(!righe.length){ showToast('Nessuna operazione da esportare per quest’anno'); return; }
+    const cols = ['data','ticker','side','quantita','prezzo_usd','controvalore_usd','cambio_eur_usd','controvalore_eur','pnl_realizzato_eur','cambio_stimato'];
+    const q = v => { const t = String(v==null?'':v); return /[",\n;]/.test(t) ? '"'+t.replace(/"/g,'""')+'"' : t; };
+    const csv = [cols.join(',')].concat(righe.map(r=>cols.map(c=>q(r[c])).join(','))).join('\n');
+    try{
+      const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'timone-fiscale-' + ((LIVE && LIVE.fiscale && LIVE.fiscale.anno) || '') + '.csv';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 1000);
+      showToast('Report esportato — ' + righe.length + ' operazioni in CSV');
+    }catch(e){ showToast('Esportazione non riuscita su questo dispositivo'); }
+  },
   apriAvvisi(){ setState({avvisiOpen:true,menu:false}); },
   chiudiAvvisi(){ setState({avvisiOpen:false}); },
   avvisoOpen(id, tab){ setState({avvisiOpen:false, tab}); },

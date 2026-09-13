@@ -193,3 +193,70 @@ def test_budget_esaurito_blocca(tmp_path, rotta, now_in_window, fx_one):
     assert report.decisions  # ci sono ordini proposti
     assert all(not d.approved for d in report.decisions)
     assert all(d.rule == "daily_budget" for d in report.decisions)
+
+
+# --- Riconciliazione degli ordini non riempiti --------------------------------
+
+def test_ordine_pendente_viene_riconciliato_al_run_successivo(
+    tmp_path, rotta, now_in_window, fx_one
+):
+    """Un ordine riempito in ritardo deve rientrare nei lotti fiscali.
+
+    Senza riconciliazione resterebbe fuori per sempre (il client_order_id
+    contiene la data, quindi domani è un ID diverso) e il divario con il broker
+    finirebbe per far calare l'Àncora per "dati incoerenti".
+    """
+    broker = FakeBroker(fill=False)  # nessun ordine si riempie entro il polling
+    engine, broker, store = make_engine(
+        tmp_path, rotta, now_in_window, fx_one, broker=broker
+    )
+    engine.run(dry_run=False)
+
+    s1 = store.read()
+    assert len(s1.pending_orders) == 3, "gli ordini non riempiti vanno annotati"
+    assert s1.tax_lots == {}
+    assert s1.spent_on("2026-07-06") == 0.0
+
+    # Più tardi il broker li riempie davvero.
+    for cid in list(s1.pending_orders):
+        broker.concludi(cid, qty=1.0, prezzo=50.0)
+
+    # Run del giorno dopo: la riconciliazione li recupera.
+    now_dopo = lambda: datetime(2026, 7, 7, 16, 0, tzinfo=ROME)
+    engine2, _b, _s = make_engine(tmp_path, rotta, now_dopo, fx_one, broker=broker)
+    engine2.run(dry_run=False)
+
+    s2 = store.read()
+    assert not [c for c in s2.pending_orders if c in s1.pending_orders]
+    assert sum(len(l) for l in s2.tax_lots.values()) >= 3
+    # Attribuiti al giorno dell'ORDINE (6 luglio), non a quello della scoperta.
+    assert s2.spent_on("2026-07-06") == pytest.approx(150.0)
+    date_lotti = {lot.date for lots in s2.tax_lots.values() for lot in lots}
+    assert "2026-07-06" in date_lotti
+
+
+def test_ordine_pendente_poi_rifiutato_non_viene_contabilizzato(
+    tmp_path, rotta, now_in_window, fx_one
+):
+    from timone.models import Fill
+
+    broker = FakeBroker(fill=False)
+    engine, broker, store = make_engine(
+        tmp_path, rotta, now_in_window, fx_one, broker=broker
+    )
+    engine.run(dry_run=False)
+    pendenti = list(store.read().pending_orders)
+    assert pendenti
+
+    # Il broker li scarta.
+    for cid in pendenti:
+        vecchio = broker._by_cid[cid]
+        broker._by_cid[cid] = Fill(vecchio.ticker, vecchio.side, cid, "rejected")
+
+    now_dopo = lambda: datetime(2026, 7, 7, 16, 0, tzinfo=ROME)
+    engine2, _b, _s = make_engine(tmp_path, rotta, now_dopo, fx_one, broker=broker)
+    engine2.run(dry_run=False)
+
+    s2 = store.read()
+    assert not [c for c in s2.pending_orders if c in pendenti], "vanno tolti dai pendenti"
+    assert s2.spent_on("2026-07-06") == 0.0, "un ordine rifiutato non si contabilizza"

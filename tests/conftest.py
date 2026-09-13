@@ -41,6 +41,21 @@ class FakeBroker(Broker):
         self._by_cid[client_order_id] = f
         return f
 
+    def get_fill(self, *, client_order_id, ticker, side) -> Fill:
+        """Stato attuale di un ordine già inviato (per la riconciliazione)."""
+        f = self._by_cid.get(client_order_id)
+        if f is not None:
+            return f
+        return Fill(ticker, side, client_order_id, "pending")
+
+    def concludi(self, client_order_id: str, *, qty: float, prezzo: float) -> None:
+        """Test helper: il broker riempie un ordine rimasto in sospeso."""
+        vecchio = self._by_cid[client_order_id]
+        self._by_cid[client_order_id] = Fill(
+            vecchio.ticker, vecchio.side, client_order_id, "filled",
+            filled_qty=qty, filled_avg_price_usd=prezzo,
+        )
+
     @property
     def unique_orders(self) -> int:
         return len(self._by_cid)

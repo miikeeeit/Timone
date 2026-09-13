@@ -54,6 +54,13 @@ class Broker(ABC):
         self, *, client_order_id: str, ticker: str, side: OrderSide, notional_usd: float
     ) -> Fill: ...
 
+    @abstractmethod
+    def get_fill(
+        self, *, client_order_id: str, ticker: str, side: OrderSide
+    ) -> Fill:
+        """Stato attuale di un ordine già inviato, per la riconciliazione."""
+        ...
+
 
 class AlpacaBroker(Broker):
     """Implementazione paper di Alpaca via alpaca-py."""
@@ -160,31 +167,49 @@ class AlpacaBroker(Broker):
         self._with_retry("invio ordine", _invia)
         return self._await_fill(client_order_id, ticker, side)
 
+    def _esito(self, order, client_order_id: str, ticker: str, side: OrderSide):
+        """Traduce un ordine del broker in un Fill definitivo, o None se è
+        ancora aperto (nessuna conclusione da trarre)."""
+        stato = str(order.status).split(".")[-1].lower()
+        filled_qty = float(order.filled_qty or 0)
+        if stato == "filled" and filled_qty > 0:
+            return Fill(
+                ticker=ticker,
+                side=side,
+                client_order_id=client_order_id,
+                status="filled",
+                filled_qty=filled_qty,
+                filled_avg_price_usd=float(order.filled_avg_price or 0),
+            )
+        if stato in {"rejected", "canceled", "expired"}:
+            return Fill(
+                ticker=ticker, side=side,
+                client_order_id=client_order_id, status=stato,
+            )
+        return None
+
+    def get_fill(
+        self, *, client_order_id: str, ticker: str, side: OrderSide
+    ) -> Fill:
+        order = self._with_retry(
+            "stato ordine",
+            lambda: self._client.get_order_by_client_id(client_order_id),
+        )
+        esito = self._esito(order, client_order_id, ticker, side)
+        return esito or Fill(
+            ticker=ticker, side=side,
+            client_order_id=client_order_id, status="pending",
+        )
+
     def _await_fill(self, client_order_id: str, ticker: str, side: OrderSide) -> Fill:
-        last_status = "unknown"
         for attempt in range(self.FILL_POLL_ATTEMPTS):
             order = self._with_retry(
                 "stato ordine",
                 lambda: self._client.get_order_by_client_id(client_order_id),
             )
-            last_status = str(order.status).split(".")[-1].lower()
-            filled_qty = float(order.filled_qty or 0)
-            if last_status in {"filled"} and filled_qty > 0:
-                return Fill(
-                    ticker=ticker,
-                    side=side,
-                    client_order_id=client_order_id,
-                    status="filled",
-                    filled_qty=filled_qty,
-                    filled_avg_price_usd=float(order.filled_avg_price or 0),
-                )
-            if last_status in {"rejected", "canceled", "expired"}:
-                return Fill(
-                    ticker=ticker,
-                    side=side,
-                    client_order_id=client_order_id,
-                    status=last_status,
-                )
+            esito = self._esito(order, client_order_id, ticker, side)
+            if esito is not None:
+                return esito
             if attempt < self.FILL_POLL_ATTEMPTS - 1:
                 self._sleep(self.FILL_POLL_INTERVAL_S)
 
