@@ -132,7 +132,15 @@ async function attivaNotifiche(){
     const tokens = (snap.exists && (snap.data().tokens||[])) || [];
     if(tokens.indexOf(token) < 0) await rif.set({tokens: tokens.concat([token])}, {merge:true});
     try{ localStorage.setItem('timone-push','1'); }catch(e){}
-    showToast('Notifiche attive: riceverai solo le eccezioni');
+    // Prova immediata e LOCALE, senza passare da Firebase: se questa notifica non
+    // compare, il blocco è nel permesso di Android per l'app, non nell'invio.
+    try{
+      const pronto = await navigator.serviceWorker.ready;
+      await pronto.showNotification('Timone — notifiche pronte', {
+        body: 'Se vedi questa notifica, Android la mostra. Le prossime arriveranno solo per le eccezioni.',
+        tag: 'timone-prova-locale', icon: '/icons/icon-192.png' });
+    }catch(e){}
+    showToast('Registrata. Se non vedi la notifica di prova: Impostazioni Android → App → Timone → Notifiche');
     render();
   }catch(e){ showToast('Attivazione non riuscita: ' + ((e && (e.code||e.message)) || 'errore')); }
 }
@@ -887,7 +895,7 @@ function menuOverlay(d){
   <div style="position:absolute;top:52px;right:16px;width:220px;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 10px 30px rgba(27,38,59,0.16);padding:6px;display:flex;flex-direction:column;animation:fadeIn .15s ease;">
     <div data-action="goFiscale" style="display:flex;justify-content:space-between;align-items:center;padding:12px 12px;border-radius:9px;cursor:pointer;"><span style="font:500 14px 'Space Grotesk',sans-serif;">Fiscale</span><span style="font:400 11px 'JetBrains Mono',monospace;color:var(--muted);">2026</span></div>
     <div data-action="goDiagnostica" style="display:flex;justify-content:space-between;align-items:center;padding:12px 12px;border-radius:9px;cursor:pointer;"><span style="font:500 14px 'Space Grotesk',sans-serif;">Diagnostica</span><span style="${dot('var(--ok)')}"></span></div>
-    <div data-action="attivaPush" style="display:flex;justify-content:space-between;align-items:center;padding:12px 12px;border-radius:9px;cursor:pointer;"><span style="font:500 14px 'Space Grotesk',sans-serif;">Notifiche</span><span style="font:400 11px 'JetBrains Mono',monospace;color:${pushStato()==='attive'?'var(--ok)':'var(--muted)'};">${pushStato()}</span></div>
+    <div data-action="attivaPush" style="display:flex;justify-content:space-between;align-items:center;padding:12px 12px;border-radius:9px;cursor:pointer;"><span style="font:500 14px 'Space Grotesk',sans-serif;">Notifiche</span><span style="font:400 11px 'JetBrains Mono',monospace;color:${pushStato()==='attive'?'var(--ok)':'var(--muted)'};">${pushStato()==='attive'?'attive · tocca per provare':pushStato()}</span></div>
     <div style="border-top:1px solid var(--line);margin:4px 8px;"></div>
     ${USER?`<div data-action="authEsci" style="display:flex;justify-content:space-between;align-items:center;padding:12px 12px;border-radius:9px;cursor:pointer;"><span style="font:500 14px 'Space Grotesk',sans-serif;">Esci</span><span style="font:400 11px 'JetBrains Mono',monospace;color:var(--muted);">${esc((USER.email||'').slice(0,18))}</span></div><div style="border-top:1px solid var(--line);margin:4px 8px;"></div>`:''}
     <div style="padding:9px 12px;font:400 11px 'JetBrains Mono',monospace;color:var(--muted);">Timone v0.5 · paper trading</div>
@@ -988,7 +996,10 @@ const actions = {
       .then(()=>setState({authBusy:false, authInfo:'Ti ho inviato un’email per reimpostare la password: controlla la posta (anche lo spam).'}))
       .catch(e=>setState({authBusy:false, authErr:'Invio non riuscito: controlla che l’email sia scritta bene.'}));
   },
-  attivaPush(){ if(pushStato()==='attive'){ showToast('Notifiche già attive su questo dispositivo'); return; } attivaNotifiche(); },
+  // Sempre ri-registrare. "attive" riflette il permesso del browser, non quello di
+  // Android: dopo una reinstallazione l'app ha un permesso di sistema suo, spento
+  // di default, e solo una nuova richiesta fa comparire il dialogo di Android.
+  attivaPush(){ attivaNotifiche(); },
   authEsci(){ if(AUTH) AUTH.signOut(); setState({menu:false, lpass:''}); },
   varoAvanti1(){ if(state.chiaveApi.trim().length>=4 && state.chiaveSegreta.trim().length>=4) setState({varoStep:2}); },
   varoAvanti2(){ if(varoValidation().ok) setState({varoStep:3, varoActiveT:null}); },
