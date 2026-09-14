@@ -14,6 +14,10 @@ cp app/index.html hosting/index.html
 # Il service worker DEVE stare nella root: il suo scope dipende dal percorso da
 # cui viene servito. Serve solo alle notifiche push, non fa cache dei dati.
 cp app/sw.js hosting/sw.js
+# Manifest e icone come FILE veri: senza, Chrome non installa la PWA come app
+# (WebAPK) e la lascia un collegamento — notifiche comprese, attribuite a Chrome.
+cp app/manifest.webmanifest hosting/manifest.webmanifest
+mkdir -p hosting/icons && cp app/icons/*.png hosting/icons/
 # `if` invece di `[ ... ] && cp`: con `set -e` un test negativo faceva uscire lo
 # script PRIMA del deploy, saltandolo in silenzio.
 if [ -f data/simboli.json ]; then

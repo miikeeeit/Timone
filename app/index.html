@@ -8,6 +8,9 @@
 <meta name="apple-mobile-web-app-title" content="Timone">
 <title>Timone · console</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -156,7 +159,7 @@ try{
         showToast(titolo + ' — ' + testo);
         if(navigator.serviceWorker && typeof Notification !== 'undefined' && Notification.permission === 'granted'){
           navigator.serviceWorker.ready
-            .then(reg => reg.showNotification(titolo, { body: testo, tag: 'timone-eccezione' }))
+            .then(reg => reg.showNotification(titolo, { body: testo, tag: 'timone-eccezione', icon: '/icons/icon-192.png' }))
             .catch(()=>{});
         }
       });
@@ -1095,12 +1098,10 @@ mq.addEventListener('change', onMq);
 state.desktop = mq.matches;
 loadUI();
 
-/* ---------------- PWA manifest ---------------- */
-try {
-  const icon = "data:image/svg+xml," + encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='#1B263B'/>${compass(100,false,'#F5F2EC').replace(/^<svg[^>]*>|<\/svg>$/g,'')}</svg>`);
-  const mf = { name:'Timone', short_name:'Timone', start_url:'.', display:'standalone', background_color:'#E7E2D4', theme_color:'#1B263B', icons:[{src:icon, sizes:'any', type:'image/svg+xml'}] };
-  const link=document.createElement('link'); link.rel='manifest'; link.href=URL.createObjectURL(new Blob([JSON.stringify(mf)],{type:'application/manifest+json'})); document.head.appendChild(link);
-} catch(e){}
+/* PWA manifest: file vero in /manifest.webmanifest, collegato nell'<head>.
+   Prima era un blob: generato qui con icona SVG e start_url '.', che Chrome
+   non può scaricare né installare: l'app restava un collegamento a Chrome,
+   e le notifiche risultavano di Chrome. */
 
 render();
 </script>

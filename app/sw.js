@@ -30,6 +30,7 @@ messaging.onBackgroundMessage(payload => {
   const n = payload.notification || {};
   self.registration.showNotification(n.title || 'Timone', {
     body: n.body || '',
+    icon: '/icons/icon-192.png',
     tag: 'timone-eccezione',   // una sola notifica per volta, non una pila
     requireInteraction: false,
   });
