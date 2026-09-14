@@ -4,7 +4,7 @@
 
 **Stato del progetto:** prototipo funzionante, in **paper trading** (denaro simulato) su [Alpaca](https://alpaca.markets). Sviluppato come base che può evolvere verso un prodotto reale; la roadmap verso la gestione di capitale vero è esplicita e vincolata a criteri di affidabilità (vedi *Prossimi passi*).
 
-- **Cosa funziona oggi:** motore di calcolo ordini (DCA + ribilanciamento a soglie), guardrail di sicurezza nel codice, esecuzione via API Alpaca, giornale di bordo con catena hash verificabile, log fiscale italiano (LIFO + cambio BCE), sicurezza attiva (kill switch automatico), versionamento della strategia con quarantena, diagnostica di sistema (`timone doctor`), diario settimanale in linguaggio naturale, CLI completa, console web di sola lettura con Àncora azionabile da mobile. 149 test automatici.
+- **Cosa funziona oggi:** motore di calcolo ordini (DCA + ribilanciamento a soglie), guardrail di sicurezza nel codice, esecuzione via API Alpaca, giornale di bordo con catena hash verificabile, log fiscale italiano (LIFO + cambio BCE), sicurezza attiva (kill switch automatico), versionamento della strategia con quarantena, diagnostica di sistema (`timone doctor`), diario settimanale in linguaggio naturale, CLI completa, console web di sola lettura con Àncora azionabile da mobile. 150 test automatici.
 - **Cosa manca / è in corso:** nulla di strutturale; resta la valutazione del passaggio a capitale reale. Nessun percorso verso il trading *live*: l'endpoint reale è bloccato nel codice.
 
 ---
@@ -96,7 +96,7 @@ Questa è la sezione che spiega *come ragiono*: le scelte non ovvie, e cosa ho s
 - **[alpaca-py](https://github.com/alpacahq/alpaca-py)** — API broker (dati e ordini, solo paper)
 - **PyYAML** — configurazione della strategia
 - **python-dotenv** — gestione delle credenziali via variabili d'ambiente
-- **pytest** — 149 test automatici (guardrail, calcolo ordini, LIFO fiscale, sicurezza attiva, motore, diagnostica, resilienza di rete)
+- **pytest** — 150 test automatici (guardrail, calcolo ordini, LIFO fiscale, sicurezza attiva, motore, diagnostica, resilienza di rete)
 - **HTML/CSS/JS vanilla** + **Firebase Hosting/Auth** — interfaccia web di sola lettura (PWA)
 - Fonte cambio: **BCE** via [frankfurter.app](https://frankfurter.app)
 
