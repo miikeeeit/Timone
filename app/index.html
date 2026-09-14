@@ -147,8 +147,19 @@ try{
   try{
     if(firebase.messaging && firebase.messaging.isSupported && firebase.messaging.isSupported()){
       MSG = firebase.messaging();
-      // App aperta: niente notifica di sistema, basta un avviso discreto.
-      MSG.onMessage(p => showToast(((p.notification||{}).title||'Timone') + ' — ' + ((p.notification||{}).body||'')));
+      // App aperta: il messaggio arriva qui e NON al service worker. Un avviso
+      // interno di pochi secondi si perde facilmente, e queste sono eccezioni
+      // (Àncora calata, run fallito): si mostra comunque una notifica vera.
+      MSG.onMessage(p => {
+        const n = p.notification || {};
+        const titolo = n.title || 'Timone', testo = n.body || '';
+        showToast(titolo + ' — ' + testo);
+        if(navigator.serviceWorker && typeof Notification !== 'undefined' && Notification.permission === 'granted'){
+          navigator.serviceWorker.ready
+            .then(reg => reg.showNotification(titolo, { body: testo, tag: 'timone-eccezione' }))
+            .catch(()=>{});
+        }
+      });
     }
   }catch(e){ MSG = null; }
 }catch(e){ AUTH = null; }

@@ -130,7 +130,7 @@ def test_notifica_inviata_a_ogni_dispositivo(tmp_path, monkeypatch):
 
     inviati = []
     monkeypatch.setattr(
-        messaging, "send", lambda m: inviati.append(getattr(m, "fid", None))
+        messaging, "send", lambda m: inviati.append(getattr(m, "token", None))
     )
     fake = FakeRemote()
     fake.tokens = ["telefono", "tablet"]
@@ -151,3 +151,49 @@ def test_token_di_un_dispositivo_sparito_viene_rimosso(tmp_path, monkeypatch):
     fake.tokens = ["morto"]
     assert remote.invia_notifica(_settings(tmp_path), "t", "x", remote=fake) == 0
     assert fake.rimossi == ["morto"]
+
+
+def test_errore_generico_non_cancella_un_token_valido(tmp_path, monkeypatch):
+    """Regressione: un errore qualsiasi (rete, configurazione, campo sbagliato)
+    NON deve far togliere il token. Solo "dispositivo sparito" lo giustifica —
+    altrimenti un bug nel motore cancellerebbe il telefono dell'utente."""
+    from firebase_admin import messaging
+
+    def rete_giu(_m):
+        raise RuntimeError("Temporary failure in name resolution")
+
+    monkeypatch.setattr(messaging, "send", rete_giu)
+    fake = FakeRemote()
+    fake.tokens = ["valido"]
+    assert remote.invia_notifica(_settings(tmp_path), "t", "x", remote=fake) == 0
+    assert getattr(fake, "rimossi", []) == []
+    assert fake.tokens == ["valido"]
+
+
+def test_not_registered_rimuove_il_token(tmp_path, monkeypatch):
+    from firebase_admin import messaging
+
+    def sparito(_m):
+        raise RuntimeError("NotRegistered")
+
+    monkeypatch.setattr(messaging, "send", sparito)
+    fake = FakeRemote()
+    fake.tokens = ["disinstallato"]
+    remote.invia_notifica(_settings(tmp_path), "t", "x", remote=fake)
+    assert fake.rimossi == ["disinstallato"]
+
+
+def test_notifica_web_apre_la_console(tmp_path, monkeypatch):
+    """Il messaggio porta la configurazione web: Chrome la mostra direttamente
+    e il tocco apre la console."""
+    from firebase_admin import messaging
+
+    catturati = []
+    monkeypatch.setattr(messaging, "send", lambda m: catturati.append(m))
+    fake = FakeRemote()
+    fake.tokens = ["telefono"]
+    remote.invia_notifica(_settings(tmp_path), "Àncora calata", "drawdown", remote=fake)
+    wp = catturati[0].webpush
+    assert wp is not None
+    assert wp.fcm_options.link == remote.APP_URL
+    assert wp.notification.tag == "timone-eccezione"

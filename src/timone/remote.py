@@ -34,6 +34,7 @@ _COLLECTION = "timone"
 _DOC = "ancora"
 _UI_DOC = "ui"
 _NOTIFICHE_DOC = "notifiche"
+APP_URL = "https://timone-8699e.web.app/"
 
 
 class RemoteStore(ABC):
@@ -151,24 +152,46 @@ def invia_notifica(
     if not tokens:
         return 0
 
+    import warnings
+
     from firebase_admin import messaging
 
     inviati = 0
     falliti: list[str] = []
     for token in tokens:
         try:
-            # `fid` (non `token`): in firebase-admin 7.x il campo è stato
-            # rinominato e il vecchio nome emette un DeprecationWarning.
-            messaging.send(
-                messaging.Message(
-                    notification=messaging.Notification(title=titolo, body=testo),
-                    fid=token,
+            # `token=`, NON `fid=`. firebase-admin 7.x segna `token` come deprecato
+            # e suggerisce `fid`, ma `fid` è l'ID di un'INSTALLAZIONE Firebase,
+            # non un token di registrazione FCM web: con `fid` il backend risponde
+            # NotRegistered e la notifica non parte (verificato con dry_run).
+            # Si silenzia solo quel warning, e solo qui.
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", DeprecationWarning)
+                messaging.send(
+                    messaging.Message(
+                        notification=messaging.Notification(title=titolo, body=testo),
+                        # Configurazione specifica per il web: Chrome mostra
+                        # direttamente `webpush.notification`, e il tocco apre
+                        # la console.
+                        webpush=messaging.WebpushConfig(
+                            notification=messaging.WebpushNotification(
+                                title=titolo, body=testo, tag="timone-eccezione",
+                            ),
+                            fcm_options=messaging.WebpushFCMOptions(link=APP_URL),
+                        ),
+                        token=token,
+                    )
                 )
-            )
             inviati += 1
         except Exception as exc:  # noqa: BLE001 - un invio fallito non è un guasto
             msg = str(exc)
-            if "not-registered" in msg or "Requested entity was not found" in msg:
+            dispositivo_sparito = isinstance(
+                exc, getattr(messaging, "UnregisteredError", ())
+            ) or any(
+                k in msg
+                for k in ("NotRegistered", "not-registered", "Requested entity was not found")
+            )
+            if dispositivo_sparito:
                 remote.rimuovi_token(token)  # app disinstallata: si pulisce da sé
             else:
                 falliti.append(msg[:120])

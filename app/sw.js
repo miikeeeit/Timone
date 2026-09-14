@@ -20,12 +20,16 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
+// Un service worker nuovo prende il controllo SUBITO, invece di restare in
+// attesa finché ogni finestra dell'app non viene chiusa: altrimenti dopo un
+// deploy le notifiche resterebbero gestite dal codice vecchio.
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
+
 messaging.onBackgroundMessage(payload => {
   const n = payload.notification || {};
   self.registration.showNotification(n.title || 'Timone', {
     body: n.body || '',
-    icon: '/icona.png',
-    badge: '/icona.png',
     tag: 'timone-eccezione',   // una sola notifica per volta, non una pila
     requireInteraction: false,
   });
