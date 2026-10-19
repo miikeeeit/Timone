@@ -34,23 +34,48 @@ class Settings:
     firebase_service_account: str | None = None
 
 
-def _load_dotenv() -> None:
-    """Load .env if present. Optional dependency, no hard failure if missing."""
+def _load_dotenv() -> Path | None:
+    """Load .env if present and return its path (None if there is none).
+
+    Optional dependency, no hard failure if missing. The lookup is the same as
+    a bare `load_dotenv()`: python-dotenv walks up from this package's folder.
+    """
     try:
-        from dotenv import load_dotenv
+        from dotenv import find_dotenv, load_dotenv
     except ImportError:  # pragma: no cover - dotenv is a declared dependency
-        return
-    load_dotenv()
+        return None
+    found = find_dotenv()
+    if not found:
+        return None
+    load_dotenv(found)
+    return Path(found)
 
 
-def load_settings(env: dict[str, str] | None = None) -> Settings:
+def load_settings(
+    env: dict[str, str] | None = None, *, base_dir: str | Path | None = None
+) -> Settings:
     """Build Settings from the environment.
 
     Passing `env` explicitly is used by tests; production reads os.environ.
+
+    Relative paths (data dir, rotta, service account, defaults included) are
+    resolved against `base_dir`. In production that is the folder of the .env
+    the API keys come from, so keys and state always belong to the same
+    installation whatever the current directory: launched from elsewhere,
+    Timone used to read and write a fresh ./data there, with its own Àncora.
+    Without a .env (and no `base_dir`) they stay relative to the current
+    directory, as before.
     """
     if env is None:
-        _load_dotenv()
+        dotenv_path = _load_dotenv()
         env = dict(os.environ)
+        if base_dir is None and dotenv_path is not None:
+            base_dir = dotenv_path.parent
+    base = Path(base_dir) if base_dir is not None else None
+
+    def _path(value: str) -> Path:
+        p = Path(value).expanduser()
+        return base / p if base is not None and not p.is_absolute() else p
 
     api_key = env.get("ALPACA_API_KEY", "").strip()
     api_secret = env.get("ALPACA_API_SECRET", "").strip()
@@ -62,9 +87,11 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
             f"{PAPER_BASE_URL} (paper trading). Trovato: {base_url!r}."
         )
 
-    data_dir = Path(env.get("TIMONE_DATA_DIR", "./data")).expanduser()
-    rotta_path = Path(env.get("TIMONE_ROTTA", "./rotta.yaml")).expanduser()
+    data_dir = _path(env.get("TIMONE_DATA_DIR", "./data"))
+    rotta_path = _path(env.get("TIMONE_ROTTA", "./rotta.yaml"))
     service_account = env.get("FIREBASE_SERVICE_ACCOUNT", "").strip() or None
+    if service_account is not None:
+        service_account = str(_path(service_account))
 
     return Settings(
         api_key=api_key,
