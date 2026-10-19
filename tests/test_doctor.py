@@ -88,3 +88,72 @@ def test_bussola_ponte_spento_avvisa(tmp_path):
 def test_run_checks_include_la_bussola(tmp_path):
     ids = [c.id for c in doctor.run_checks(_settings(tmp_path))]
     assert "bussola" in ids
+
+
+# --- Scheduler launchd: caricato non vuol dire funzionante -------------------
+# `launchctl list` stampa PID, ultimo codice d'uscita ed etichetta. Il 19/10 i
+# job erano caricati ma uscivano con 127 da dieci giorni (progetto spostato,
+# script non più al suo posto) e doctor diceva "launchd attivo".
+
+def _plist(cartella: Path, label: str, script: Path) -> None:
+    import plistlib
+
+    cartella.mkdir(parents=True, exist_ok=True)
+    with (cartella / f"{label}.plist").open("wb") as f:
+        plistlib.dump({"Label": label,
+                       "ProgramArguments": ["/bin/zsh", str(script), "run"]}, f)
+
+
+def _script(tmp_path: Path) -> Path:
+    s = tmp_path / "progetto" / "scripts" / "timone_scheduled.sh"
+    s.parent.mkdir(parents=True, exist_ok=True)
+    s.write_text("#!/bin/zsh\n")
+    return s
+
+
+def test_scheduler_launchd_sano_ok(tmp_path):
+    agenti, script = tmp_path / "LaunchAgents", _script(tmp_path)
+    _plist(agenti, "com.timone.run", script)
+    _plist(agenti, "com.timone.heartbeat", script)
+    elenco = "PID\tStatus\tLabel\n-\t0\tcom.timone.run\n-\t0\tcom.timone.heartbeat\n"
+    c = doctor._scheduler(launchctl_list=elenco, agents_dir=agenti)
+    assert c.esito == doctor.OK
+    assert "launchd attivo" in c.dettaglio
+
+
+def test_scheduler_run_uscito_con_127_errore(tmp_path):
+    agenti, script = tmp_path / "LaunchAgents", _script(tmp_path)
+    _plist(agenti, "com.timone.run", script)
+    elenco = "-\t127\tcom.timone.run\n"
+    c = doctor._scheduler(launchctl_list=elenco, agents_dir=agenti)
+    assert c.esito == doctor.ERR
+    assert "127" in c.dettaglio
+
+
+def test_scheduler_heartbeat_rotto_errore_anche_se_run_ok(tmp_path):
+    """Senza heartbeat nessun avviso parte quando i run si fermano."""
+    agenti, script = tmp_path / "LaunchAgents", _script(tmp_path)
+    _plist(agenti, "com.timone.run", script)
+    _plist(agenti, "com.timone.heartbeat", script)
+    elenco = "-\t0\tcom.timone.run\n-\t1\tcom.timone.heartbeat\n"
+    c = doctor._scheduler(launchctl_list=elenco, agents_dir=agenti)
+    assert c.esito == doctor.ERR
+    assert "com.timone.heartbeat" in c.dettaglio
+
+
+def test_scheduler_plist_verso_percorso_sparito_errore_subito(tmp_path):
+    """Dopo uno spostamento l'ultimo codice è ancora 0 fino al giro successivo:
+    il percorso mancante nel plist si vede già prima."""
+    agenti = tmp_path / "LaunchAgents"
+    sparito = tmp_path / "vecchio" / "scripts" / "timone_scheduled.sh"
+    _plist(agenti, "com.timone.run", sparito)
+    c = doctor._scheduler(launchctl_list="-\t0\tcom.timone.run\n", agents_dir=agenti)
+    assert c.esito == doctor.ERR
+    assert str(sparito) in c.dettaglio
+
+
+def test_scheduler_etichetta_simile_non_conta(tmp_path):
+    """`com.timone.runner` non è `com.timone.run`."""
+    c = doctor._scheduler(launchctl_list="-\t0\tcom.timone.runner\n",
+                          agents_dir=tmp_path, crontab="")
+    assert c.esito == doctor.WARN

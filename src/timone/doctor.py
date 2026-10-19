@@ -64,26 +64,80 @@ def _cambio(settings: Settings, state) -> Check:
         return Check("cambio", "Fonte cambio BCE", "non verificabile ora", WARN)
 
 
-def _scheduler() -> Check:
-    """Best-effort e specifico per host: prima launchd (assetto attuale),
-    poi cron. Se non rileva nulla, avvisa senza fallire."""
+def _comando(argv: list[str]) -> str:
     import subprocess
 
     try:
-        out = subprocess.run(["launchctl", "list"], capture_output=True,
-                             text=True, timeout=5)
-        if "com.timone.run" in out.stdout:
-            return Check("scheduler", "Scheduler dei run",
-                         "launchd attivo · com.timone.run caricato", OK)
+        return subprocess.run(argv, capture_output=True, text=True, timeout=5).stdout
     except Exception:  # noqa: BLE001
-        pass
+        return ""
+
+
+LAUNCHD_JOBS = ("com.timone.run", "com.timone.heartbeat")
+
+
+def _launchd_ultimo_codice(elenco: str, label: str) -> int | None:
+    """Ultimo codice d'uscita di `label` nell'output di `launchctl list`
+    (colonne: PID, ultimo codice, etichetta). None se il job non è caricato."""
+    for riga in elenco.splitlines():
+        parti = riga.split()
+        if len(parti) == 3 and parti[2] == label:
+            try:
+                return int(parti[1])
+            except ValueError:
+                return 0
+    return None
+
+
+def _launchd_percorsi_mancanti(plist: Path) -> list[str]:
+    """Percorsi assoluti nei ProgramArguments del plist che non esistono più:
+    succede quando il progetto viene spostato e il plist no."""
+    import plistlib
+
     try:
-        out = subprocess.run(["crontab", "-l"], capture_output=True,
-                             text=True, timeout=5)
-        if "timone" in out.stdout:
-            return Check("scheduler", "Scheduler dei run", "cron attivo", OK)
+        with plist.open("rb") as f:
+            argomenti = plistlib.load(f).get("ProgramArguments", [])
     except Exception:  # noqa: BLE001
-        pass
+        return []
+    return [a for a in argomenti
+            if isinstance(a, str) and a.startswith("/") and not Path(a).exists()]
+
+
+def _scheduler(launchctl_list: str | None = None,
+               agents_dir: Path | None = None,
+               crontab: str | None = None) -> Check:
+    """Best-effort e specifico per host: prima launchd (assetto attuale),
+    poi cron. Se non rileva nulla, avvisa senza fallire. Gli argomenti
+    sostituiscono i comandi veri nei test.
+
+    Caricato non vuol dire funzionante: per ogni job launchd conta anche
+    l'ultimo codice d'uscita, e che i percorsi del suo plist esistano ancora."""
+    if launchctl_list is None:
+        launchctl_list = _comando(["launchctl", "list"])
+    if agents_dir is None:
+        agents_dir = Path.home() / "Library" / "LaunchAgents"
+    if _launchd_ultimo_codice(launchctl_list, "com.timone.run") is not None:
+        problemi = []
+        for label in LAUNCHD_JOBS:
+            codice = _launchd_ultimo_codice(launchctl_list, label)
+            if codice is None:
+                continue
+            mancanti = _launchd_percorsi_mancanti(agents_dir / f"{label}.plist")
+            if mancanti:
+                problemi.append(f"{label} punta a {mancanti[0]}, che non esiste")
+            elif codice != 0:
+                motivo = " (script non trovato)" if codice == 127 else ""
+                problemi.append(f"{label} uscito con codice {codice}{motivo}")
+        if problemi:
+            return Check("scheduler", "Scheduler dei run",
+                         "launchd caricato ma non funziona · " + " · ".join(problemi),
+                         ERR)
+        return Check("scheduler", "Scheduler dei run",
+                     "launchd attivo · com.timone.run caricato", OK)
+    if crontab is None:
+        crontab = _comando(["crontab", "-l"])
+    if "timone" in crontab:
+        return Check("scheduler", "Scheduler dei run", "cron attivo", OK)
     return Check("scheduler", "Scheduler dei run",
                  "nessuno schedulatore rilevato · i run vanno lanciati a mano", WARN)
 
