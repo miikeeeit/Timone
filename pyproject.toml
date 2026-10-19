@@ -13,8 +13,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Ponte con la PWA (Àncora da mobile, notifiche push): serve solo se si
+# configura FIREBASE_SERVICE_ACCOUNT. Senza, il motore ignora il ponte.
+firebase = [
+    "firebase-admin>=7.5",
+]
+# I test delle notifiche (tests/test_remote.py) importano firebase_admin.messaging,
+# quindi l'ambiente di sviluppo lo include: `pip install -e '.[dev]'` -> suite completa.
 dev = [
     "pytest>=8.0",
+    "firebase-admin>=7.5",
 ]
 
 [project.scripts]
